@@ -1,1 +1,1 @@
-# Terrace: PyTorch Utilities Library
+# Terrace: A PyTorch Utilities Library
