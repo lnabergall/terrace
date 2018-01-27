@@ -28,7 +28,13 @@ def accuracy(predictions, labels, k, pad=True, weights_fn=torch.ones_like):
     if pad:
         predictions, labels = pad_with_zeros(predictions, labels)
     weights = weights_fn(labels)
-    pass
+    if labels.dim() == predictions.dim():
+        keepdim = True
+    else:
+        keepdim = False
+    greedy_choices = predictions.max(predictions.dim()-1, keepdim=keepdim)[1]
+
+    return torch.mean(greedy_choices.eq(labels)*weights)
 
 
 def accuracy_topk(predictions, labels, pad=True, weights_fn=torch.ones_like):
@@ -52,18 +58,33 @@ def mean_squared_error(predictions, labels, root=True,
     weights = weights_fn(labels)
     mse = torch.mean(torch.pow(predictions - labels, 2)*weights)
     if root:
-        error = torch.sqrt(mse)
+        error = mse.sqrt()
     else:
         error = mse
 
     return error
 
 
-def neg_log_perplexity(predictions, labels, pad=True, weights_fn=torch.ones_like):
+def neg_log_perplexity(predictions, labels, base=2, 
+                       pad=True, weights_fn=torch.ones_like):
+    # Assumes predictions are probabilities, that is, lie between 0 and 1
+    # Assumes labels is a torch.LongTensor
     if pad:
         predictions, labels = pad_with_zeros(predictions, labels)
     weights = weights_fn(labels)
-    pass
+    label_dim = labels.dim()
+    pred_dim = predictions.dim()
+    if label_dim < pred_dim: 
+        # Assumes the last dim of predictions represents a distribution 
+        # over classes and the last dim of labels is a class index. 
+        label_probabilities = predictions.gather(
+            pred_dim-1, labels.unsqueeze(label_dim))
+    else:
+        # Assumes labels is an indicator Tensor of the same shape as predictions
+        label_probabilities = predictions * labels
+    log_perplexity = torch.mean(torch.log(label_probabilities)*weights)
+
+    return log_perplexity
 
 
 def approximate_bleu(predictions, labels):
