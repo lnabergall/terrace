@@ -1,9 +1,26 @@
 """"""
 
+import functools
 from itertools import chain
 
 import torch
 from torch.nn.functional import pad
+
+
+BUILTIN_METRICS = {
+    "accuracy": accuracy,
+    "accuracy_topk": accuracy_topk,
+    "accuracy_top5": functools.partial(accuracy_topk, k=5),
+    "sequence_accuracy": sequence_accuracy,
+    "mse": functools.partial(mean_squared_error, root=False),
+    "rmse": mean_squared_error,
+    "neg_log_perplexity": neg_log_perplexity,
+}
+
+
+def resolve_metrics(metrics):
+    return [BUILTIN_METRICS[metric] if isinstance(metric, str) else metric 
+            for metric in metrics]
 
 
 def pad_with_zeros(x, y, axis=1, length=None):
@@ -38,7 +55,7 @@ def accuracy(predictions, labels, k, pad=True,
     return torch.mean(greedy_choices.eq(labels)*weights)
 
 
-def accuracy_topk(predictions, labels, k, pad=True, 
+def accuracy_topk(predictions, labels, k=5, pad=True, 
                   weights_fn=torch.ones_like, ignore=None):
     labels = labels.long()
     if pad:

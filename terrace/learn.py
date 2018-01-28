@@ -391,7 +391,7 @@ def EvaluationCallback(PeriodicCallback):
         results = self.eval_function(model, hparams, data_source, 
                                      self.metrics, self.batch_size, steps)
         log_function("evaluation - step %s - " + ", ".join(
-            [metric + " = " + str(value) for metric, value in results.items()]))
+            [str(metric) + " = " + str(value) for metric, value in results.items()]))
         return results
 
     def after_train_step(self, trainer, step):
