@@ -579,7 +579,7 @@ class DataSource:
         if data is not None and size_limit is not None and len(data) > size_limit:
             raise ValueError("Length of 'data' exceeds size limit!")
         self.size_limit = size_limit
-        self.random_access = random_access
+        self._random_access = random_access
         self.name = name
         if tensor_dataset is not None:
             self.initialize_with_dataset(tensor_dataset)
@@ -588,6 +588,10 @@ class DataSource:
                 self.data = list(data)
             else:
                 self.data = deque(data, size_limit)
+
+        # tracks the last (reverse) index of the last requested batch
+        # takes into account updates, only valid if random sampling never used
+        self._state_index = 0
 
     def __getitem__(self, index):
         return self.data[index]
@@ -619,13 +623,15 @@ class DataSource:
                                  for j in range(len(dataset[i][1]))} 
                                 for i in range(len(dataset))]
 
-        if random_access:
+        if self._random_access:
             self.data = list(zip(self.input_data, self.target_data))
         else:
             self.data = deque(zip(self.input_data, self.target_data), self.size_limit)
 
         if size_limit is not None and len(self.data) > size_limit:
             raise ValueError("Dataset exceeds size limit!")
+
+        self._state_index = 0
 
     def load(self, file_path, name=None):
         """
@@ -646,8 +652,11 @@ class DataSource:
         """
         if file_name is None:
             file_name = self.name
-        torch.save((self.data, self.size_limit, self.random_access, self.name), 
+        torch.save((self.data, self.size_limit, self._random_access, self.name), 
                    os.path.join(dir_name, file_name))
+
+    def reset(self):
+        self._state_index = 0
 
     def convert_to_dataset(self):
         raise NotImplementedError
@@ -661,12 +670,12 @@ class DataSource:
 
         Args:
             data: List or tuple; either a single data point of the form 
-            (input, target) or a list of such data points.
+                (input, target) or a list of such data points.
             append: Bool; determines whether to append the data to the front/end 
                 of the data source or push it to the back/start 
                 (optional, default: False).
         """
-        if not append and self.random_access:
+        if not append and self._random_access:
             warnings.warn("Pushing data with random_access == True " 
                           "could cause significant performance issues"
                           "---try appending instead.", RuntimeWarning)
@@ -683,7 +692,9 @@ class DataSource:
                 data.reverse()
                 self.data.extendleft(data)
             if len(self) > self.size_limit:
-                self.data = self.data[:-len(self)+self.size_limit]
+                if self._state_index >= len(self) - self.size_limit:
+                    self._state_index -= len(self) - self.size_limit
+                self.data = self.data[:self.size_limit]
 
     def get_next_batch(self, batch_size, random_sample=False, 
                        with_replacement=True, concat_batchwise=False):
@@ -694,13 +705,18 @@ class DataSource:
                 from the data source (optional, default: False).
             with_replacement: Bool; whether to sample the batch from 
                 the data source with replacement or not (optional, default: True).
-            concat_batchwise: Bool; whether to return the batch with all data points 
-                concatenated together batchwise into a single Tensor 
-                for each feature; requires the data points to either contain
-                lists of Tensors or dictionaries with Tensor values.  
-                (optional, default: False).
+            concat_batchwise: Bool; whether to return the batch with 
+                all data points concatenated together batchwise into 
+                a single Tensor for each feature; requires the data points 
+                to either contain lists of Tensors or dictionaries 
+                with Tensor values (optional, default: False).
+        Returns:
+            Batch of data points and a boolean indicating whether the data source 
+            has been exhausted or not (that is, whether the entire data source 
+            has been used and its state now reset).
         """
-        if random_sample and not self.random_access:
+        data_source_exhausted = False
+        if random_sample and not self._random_access:
             warnings.warn("Randomly sampling batches with random_access == False " 
                           "could cause significant performance issues.", 
                           RuntimeWarning)
@@ -717,7 +733,12 @@ class DataSource:
                     self.data, batch_size)
         else:
             if with_replacement:
-                batch_seq = [self.data[-i-1] for i in range(batch_size)]
+                batch_seq = [self.data[-i-1-self._state_index] 
+                             for i in range(batch_size)]
+                self._state_index += batch_size
+                if self._state_index >= len(self):
+                    self._state_index = 0
+                    data_source_exhausted = True
             else:
                 batch_seq = [self.data.pop() for i in range(batch_size)]
 
@@ -744,7 +765,7 @@ class DataSource:
         else:
             batch = batch_seq
 
-        return batch
+        return batch, data_source_exhausted
 
     def get_feedback(self, output_data):
         """
