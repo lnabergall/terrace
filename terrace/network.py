@@ -17,7 +17,7 @@ from . import data_utilities as utils
 CUDA_AVAILABLE = torch.cuda.is_available()
 
 
-class CUDAVariable:
+class Variable:
 
     def __new__(cls, *args, **kwargs, use_cuda=True, device=None):
         if use_cuda:
