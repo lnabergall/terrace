@@ -113,6 +113,7 @@ class BaseTrainer:
 class Trainer(BaseTrainer):
 
     def run(self, steps, *args, **kwargs):
+        self.model.train()
         self.training_log = []
         self.callback_log = []
         for callback in self.callbacks:

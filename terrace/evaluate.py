@@ -28,6 +28,7 @@ def evaluate(model, hparams, data_source, metrics, batch_size,
         A dictionary mapping the names of metrics to their mean value on 
         the evaluation data.
     """
+    model.eval()
     metrics = resolve_metrics(metrics)
     step = 1
     results_per_step = []
