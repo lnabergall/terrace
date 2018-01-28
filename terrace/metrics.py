@@ -24,7 +24,9 @@ def pad_with_zeros(x, y, axis=1, length=None):
     return x_padded, y_padded
 
 
-def accuracy(predictions, labels, k, pad=True, weights_fn=torch.ones_like):
+def accuracy(predictions, labels, k, pad=True, 
+             weights_fn=torch.ones_like, ignore=None):
+    labels = labels.long()
     if pad:
         predictions, labels = pad_with_zeros(predictions, labels)
     weights = weights_fn(labels)
@@ -32,27 +34,39 @@ def accuracy(predictions, labels, k, pad=True, weights_fn=torch.ones_like):
         keepdim = True
     else:
         keepdim = False
-    greedy_choices = predictions.max(predictions.dim()-1, keepdim=keepdim)[1]
-
+    greedy_choices = predictions.max(-1, keepdim=keepdim)[1]
     return torch.mean(greedy_choices.eq(labels)*weights)
 
 
-def accuracy_topk(predictions, labels, pad=True, weights_fn=torch.ones_like):
+def accuracy_topk(predictions, labels, k, pad=True, 
+                  weights_fn=torch.ones_like, ignore=None):
+    labels = labels.long()
     if pad:
         predictions, labels = pad_with_zeros(predictions, labels)
     weights = weights_fn(labels)
-    pass
+    topk_greedy_choices = predictions.topk(k)[1]
+    expanded_labels = labels.repeat(*[1 for i in range(labels.dim()-2)] + [k])
+    return torch.mean(greedy_choices.eq(expanded_labels)*weights)
 
 
-def sequence_accuracy(predictions, labels, pad=True, weights_fn=torch.ones_like):
+def sequence_accuracy(predictions, labels, pad=True, seq_axis=2, 
+                      weights_fn=torch.ones_like, ignore=None):
+    labels = labels.long()
     if pad:
         predictions, labels = pad_with_zeros(predictions, labels)
     weights = weights_fn(labels)
-    pass
+    if labels.dim() == predictions.dim():
+        keepdim = True
+    else:
+        keepdim = False
+    greedy_choices = predictions.max(-1, keepdim=keepdim)[1]
+    not_correct = greedy_choices.ne(labels) * weights
+    not_correct = not_correct.sum(time_axis)
+    return 1 - (torch.nonzero(not_correct).size[0] / not_correct.nelement())
 
 
-def mean_squared_error(predictions, labels, root=True, 
-                       pad=True, weights_fn=torch.ones_like):
+def mean_squared_error(predictions, labels, root=True, pad=True, 
+                       weights_fn=torch.ones_like, ignore=None):
     if pad:
         predictions, labels = pad_with_zeros(predictions, labels)
     weights = weights_fn(labels)
@@ -61,45 +75,40 @@ def mean_squared_error(predictions, labels, root=True,
         error = mse.sqrt()
     else:
         error = mse
-
     return error
 
 
-def neg_log_perplexity(predictions, labels, base=2, 
-                       pad=True, weights_fn=torch.ones_like):
+def neg_log_perplexity(predictions, labels, base=2, pad=True, 
+                       weights_fn=torch.ones_like, ignore=None):
     # Assumes predictions are probabilities, that is, lie between 0 and 1
     # Assumes labels is a torch.LongTensor
+    labels = labels.long()
     if pad:
         predictions, labels = pad_with_zeros(predictions, labels)
     weights = weights_fn(labels)
-    label_dim = labels.dim()
-    pred_dim = predictions.dim()
-    if label_dim < pred_dim: 
+    if labels.dim() < predictions.dim(): 
         # Assumes the last dim of predictions represents a distribution 
         # over classes and the last dim of labels is a class index. 
-        label_probabilities = predictions.gather(
-            pred_dim-1, labels.unsqueeze(label_dim))
+        label_probabilities = predictions.gather(-1, labels.unsqueeze(-1))
     else:
         # Assumes labels is an indicator Tensor of the same shape as predictions
         label_probabilities = predictions * labels
-    log_perplexity = torch.mean(torch.log(label_probabilities)*weights)
-
-    return log_perplexity
+    return torch.mean(torch.log(label_probabilities)*weights)
 
 
-def approximate_bleu(predictions, labels):
+def approximate_bleu(predictions, labels, ignore=None):
     raise NotImplementedError
 
 
-def bleu(predictions, labels):
+def bleu(predictions, labels, ignore=None):
     raise NotImplementedError
 
 
-def rouge_n_fscore(predictions, labels, n):
+def rouge_n_fscore(predictions, labels, n, ignore=None):
     raise NotImplementedError
 
 
-def rouge_l_fscore(predictions, labels):
+def rouge_l_fscore(predictions, labels, ignore=None):
     raise NotImplementedError
 
 
