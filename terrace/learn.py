@@ -226,7 +226,7 @@ def EarlyStopCallback(PeriodicCallback):
                  stopping_predicate=None, **kwargs):
         """
         Args:
-            metric: Str or None; the name of a metric used for determining 
+            metric: Str; the name of a metric used for determining 
                 when to stop; if None, then both the training log and callback log 
                 are passed to the stopping predicate 
                 (optional, default: 'eval_loss').
@@ -367,7 +367,7 @@ def EvaluationCallback(PeriodicCallback):
             eval_function: Callable; accepts model, hparams, data_source, 
                 metrics, batch_size, and steps and returns a dictionary mapping 
                 metrics to values (optional, default: evaluate.evaluate).
-            batch_size: Int or None; if not None, batch size used during 
+            batch_size: Int; if not None, batch size used during 
                 evaluation (optional, default: None). 
             steps: Int; steps of evaluation per call to eval_function 
                 (optional, default: 100).
