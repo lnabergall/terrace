@@ -68,7 +68,7 @@ class Dataset:
         """
         file_names = utils.find_filenames(root_dir, file_pattern)
         data = chain.from_iterable(data_reader(file_name) for file_name in file_names)
-        return Dataset(data, name)
+        return Dataset(data, name=name)
 
     @classmethod
     def concatenate(cls, *datasets, method="dataset", name=None):
@@ -84,6 +84,8 @@ class Dataset:
         """
         if method == "dataset":
             data = list(chain.from_iterable([dataset.data for dataset in datasets]))
+            input_features = datasets[0].input_features
+            target_features = datasets[0].target_features
         elif method == "point":
             if len(set([len(dataset) for dataset in datasets])) != 1:
                 raise ValueError(
@@ -92,11 +94,13 @@ class Dataset:
             for data_points in zip(*datasets):
                 data.append(tuple([element[0] for element in part] 
                                   for part in zip(*data_points)))
+            input_features = None
+            target_features = None
         else:
             raise ValueError("Provided argument is not a valid method: '" 
                              + method + "'.")
 
-        return Dataset(data, name)
+        return Dataset(data, input_features, target_features, name)
 
     @staticmethod
     def apply_to_point(function, data_point, multi=False, split=False):
@@ -158,7 +162,8 @@ class Dataset:
         if in_place:
             self.data = random.sample(self.data, k=size)
         else:
-            return Dataset(random.sample(self.data, k=size), name=name)
+            return Dataset(random.sample(self.data, k=size), self.input_features, 
+                           self.target_features, name=name)
 
     def filter(self, predicate, in_place=True, name=None):
         """
@@ -170,7 +175,15 @@ class Dataset:
         if in_place:
             self.data = list(filter(predicate, self.data))
         else:
-            return Dataset(list(filter(predicate, self.data)), name=name)
+            return Dataset(list(filter(predicate, self.data)), self.input_features, 
+                           self.target_features, name=name)
+
+    def truncate(self, size, in_place=True):
+        if in_place:
+            self.data = self.data[:size]
+        else:
+            return Dataset(self.data[:size], self.input_features, 
+                           self.target_features, name)
 
     def map(self, mapping, multi=False, memory_efficient=False, 
             in_place=True, name=None):
@@ -197,7 +210,8 @@ class Dataset:
             if in_place:
                 self.data = data
             else:
-                return Dataset(data, name)
+                return Dataset(data, self.input_features, 
+                               self.target_features, name)
 
     def shuffle(self, in_place=True):
         if in_place:
@@ -225,9 +239,11 @@ class Dataset:
 
         data_sequences = utils.partition(self.data, indices[:-1])
         if name is None:
-            datasets = [Dataset(data) for data in data_sequences]
+            datasets = [Dataset(data, self.input_features, self.target_features) 
+                        for data in data_sequences]
         else:
-            datasets = [Dataset(data, name) 
+            datasets = [Dataset(data, self.input_features, 
+                                self.target_features, name) 
                         for data, name in zip(data_sequences, names)]
 
         return datasets
@@ -253,6 +269,26 @@ class TextDataset(Dataset):
         else:
             string = "<TextDataset(name={}, size={})>".format(self.name, len(self))
         return string
+
+    def truncate(self, size=None, tokens=None, in_place=True):
+
+        def counter(element):
+                count = 0
+                if isinstance(element, str):
+                    count += 1
+                elif isinstance(element, list) or isinstance(element, tuple) 
+                        or isinstance(element, set):
+                    count += sum(element)
+                return count
+
+        if size:
+            data = self.data[:size]
+        else:
+            data = self.data[:count_index(self.data, counter, tokens)]
+        if in_place:
+            self.data = data
+        else:
+            return Dataset(data, self.input_features, self.target_features, name)
 
     def convert_texts(self, curr_encoding="utf-8", new_encoding="utf-8", 
                       error_handling="strict"):
@@ -317,6 +353,7 @@ class TextDataset(Dataset):
                 and any(data_point[1] for data_point in self.data)):
             raise NotImplementedError("To split data points, we require either " 
                                       "empty inputs or empty targets.")
+
         @Dataset.datamethod(multi=True, split=split_data_points)
         def split(element):
             if not isinstance(element, str):
@@ -379,6 +416,7 @@ class TextDataset(Dataset):
         """
         if isinstance(spell_corrector, dict):
             spell_corrector = lambda string: spell_corrector[string]
+
         @Dataset.datamethod()
         def correct(element):
             if not isinstance(element, str):
@@ -406,6 +444,27 @@ class TextDataset(Dataset):
             return input_vocabulary, target_vocabulary
         else:
             return input_vocabulary + target_vocabulary
+
+    def convert_to_ids(self, vocab_mapping=None, converter=None):
+        """
+        Assumes that all text in the dataset is tokenized, 
+        i.e. the base text elements in each data point are tokens.
+
+        Args:
+            vocab_mapping: Dict; a mapping from vocabulary tokens to ids 
+                (optional, default: None).
+            convert: Callable; applied to every element of every data point, 
+                should return a list of ids (optional, default: None).
+        """
+        multi = vocab_mapping is None
+        if vocab_mapping is not None:
+            converter = lambda element: vocab_mapping[element]
+
+        @Dataset.datamethod(multi=multi)
+        def convert(element):
+            return converter(element)
+
+        self.map(convert)
 
     def get_statistics(self, tokenized=True):
 
@@ -483,9 +542,9 @@ class TensorDataset:
                  target_features=None, name=None):
         """
         Args:
-            input_data: List; a sequence of Torch Tensors 
+            input_data: List; a sequence of PyTorch Tensors 
                 with equivalent sizes along the first dimension.
-            target_data: List; a sequence of Torch Tensors
+            target_data: List; a sequence of PyTorch Tensors
                 with equivalent sizes along the first dimension 
                 (and equivalent to the tensors in input_data as well).
             input_features: Dict; a mapping from indices of input_data 
@@ -584,6 +643,9 @@ class DataSource:
         if tensor_dataset is not None:
             self.initialize_with_dataset(tensor_dataset)
         else:
+            replace = lambda element: element if element else None
+            data = [(replace(input_data), replace(target_data)) 
+                    for input_data, target_data in data]
             if random_access:
                 self.data = list(data)
             else:
@@ -627,6 +689,10 @@ class DataSource:
             self.data = list(zip(self.input_data, self.target_data))
         else:
             self.data = deque(zip(self.input_data, self.target_data), self.size_limit)
+
+        replace = lambda element: element if element else None
+        self.data = [(replace(input_data), replace(target_data)) 
+                     for input_data, target_data in self.data]
 
         if size_limit is not None and len(self.data) > size_limit:
             raise ValueError("Dataset exceeds size limit!")

@@ -74,6 +74,15 @@ def partition(sequence, indices):
     return [sequence[index1:index2] for index1, index2 in index_pairs]
 
 
+def count_index(iterable, counter, count):
+    total_count = 0
+    for i, element in enumerate(iterable):
+        total_count += aggregate_on_collection(counter, element)
+        if total_count > count:
+            break
+    return i
+
+
 def filter_dict(dictionary, keys):
     return {key: value for key, value in dictionary.items() if key in keys}
 
