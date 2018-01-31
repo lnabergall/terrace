@@ -7,6 +7,7 @@ from datetime import datetime
 from time import time
 
 import numpy as np
+from torch import nn
 from torch import optim
 
 from . import data_utilities as utils
@@ -24,6 +25,26 @@ BUILTIN_OPTIMIZERS = {
     "adamax": optim.Adamax,
     "lbfgs": optim.LBFGS,
     "rprop": optim.Rprop,
+}
+
+
+BUILTIN_LOSSES = {
+    "l1": nn.L1Loss,
+    "mse": nn.MSELoss,
+    "cross_entropy": nn.CrossEntropyLoss,
+    "nll": nn.NLLLoss,
+    "poisson_nll": nn.PoissonNLLLoss,
+    "kl_div": nn.KLDivLoss,
+    "bce": nn.BCELoss,
+    "bce_logits": nn.BCEWithLogitsLoss,
+    "margin_ranking": nn.MarginRankingLoss,
+    "hinge_embedding": nn.HingeEmbeddingLoss,
+    "multi_label_margin": nn.MultiLabelMarginLoss,
+    "smooth_l1": nn.SmoothL1Loss,
+    "soft_margin": nn.SoftMarginLoss,
+    "multi_label_soft_margin": nn.MultiLabelSoftMarginLoss,
+    "cosine_embedding": nn.CosineEmbeddingLoss,
+    "multi_margin": nn.MultiMarginLoss,
 }
 
 
@@ -65,9 +86,11 @@ class BaseTrainer:
             device: Str; determines which device is used to train the model, 
                 accepts 'gpu' or 'cpu' (optional, default: 'gpu').
             optimizer_creator: Callable; should accepts model and hparams and 
-                return an instance of a subclass of torch.optim.Optimizer; 
+                return an instance of a subclass of torch.optim.Optimizer; if None, 
+                searches for optimizer via hparams and built-in optimizers
                 (optional, default: None).
-            loss_function: Callable; (optional, default: None).
+            loss_function: Callable; if None, searches for loss function via 
+                hparams and built-in loss functions (optional, default: None).
             eval_data_source: DataSource.
             logger: logging.Logger; (optional, default: None).
             training_dir: Str; directory where all training and model data 
@@ -86,7 +109,7 @@ class BaseTrainer:
             model.cuda()
         else:
             model.cpu()
-        self.loss_function = loss_function or create_loss_function(hparams, model)
+        self.loss_function = loss_function or create_loss_function(hparams)
         self.optimizer = (create_optimizer(model, hparams) 
                           if optimizer_creator is None 
                           else optimizer_creator(model, hparams))
@@ -383,6 +406,12 @@ def EvaluationCallback(PeriodicCallback):
         self.steps = steps
         self.full_final_eval = full_final_eval
 
+        self.initial_run = True
+
+    def begin(self, trainer):
+        if self.batch_size is None:
+            self.batch_size = trainer.hparams.batch_size
+
     def _evaluate_and_log(self, model, hparams, 
                           data_source, log_function, step=None):
         if step is None and self.full_final_eval:
@@ -422,7 +451,8 @@ def SaverCallback(PeriodicCallback):
     def __init__(self, *args, model_file_prefix=None, 
                  parameters_only=True, max_stored=20, **kwargs):
         super().__init__(*args, **kwargs)
-        self.model_file_prefix = model_file_prefix
+        self.model_file_prefix = (model_file_prefix 
+                                  if model_file_prefix is not None else "model")
         self.parameters_only = parameters_only
         self.max_stored = max_stored
         self.model_file_regex = r".*\\" + self.model_file_prefix + r"-\d+"
@@ -536,3 +566,16 @@ def create_optimizer(model, hparams=None, optimizer_class=None, **kwargs):
 
     return optimizer
 
+
+def get_loss_parameters(hparams):
+    values = hparams.values()
+    param_names = [value for value in values if value.startswith("loss_")]
+    param_dict = utils.filter_dict(hparams.values(), param_names)
+    return {param[5:]: value for param, value in param_dict.items()}
+
+def create_loss_function(hparams):
+    loss_kwargs = get_loss_parameters(hparams)
+    if hparams.loss.lower() not in BUILTIN_LOSSES:
+        raise ValueError("Unable to determine which loss function to use.")
+    loss_module = BUILTIN_LOSSES[hparams.loss.lower()]
+    return loss_module(**loss_kwargs)

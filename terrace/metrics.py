@@ -6,6 +6,8 @@ from itertools import chain
 import torch
 from torch.nn.functional import pad
 
+from . import tensor_utilities as utils
+
 
 BUILTIN_METRICS = {
     "accuracy": accuracy,
@@ -23,29 +25,11 @@ def resolve_metrics(metrics):
             for metric in metrics]
 
 
-def pad_with_zeros(x, y, axis=1, length=None):
-    """Pad tensor x on provided axis to match tensor y or pad both to length."""
-    if length is not None and (length < x.shape[axis] or length < y.shape[axis]):
-        raise ValueError("Provided length is not compatible with these tensors.")
-    if length is None:
-        length = max(x.shape[axis], y.shape[axis])
-    x_length_diff = length - x.shape[axis]
-    y_length_diff = length - y.shape[axis]
-    x_padding_spec = chain.from_iterable(
-        [(0, x_length_diff) if i+1 == axis else (0, 0) for i in range(x.dim())])
-    y_padding_spec = chain.from_iterable(
-        [(0, y_length_diff) if i+1 == axis else (0, 0) for i in range(x.dim())])
-    x_padded = pad(x, x_padding_spec, mode="constant", value=0).data
-    y_padded = pad(y, y_padding_spec, mode="constant", value=0).data
-
-    return x_padded, y_padded
-
-
 def accuracy(predictions, labels, k, pad=True, 
              weights_fn=torch.ones_like, ignore=None):
     labels = labels.long()
     if pad:
-        predictions, labels = pad_with_zeros(predictions, labels)
+        predictions, labels = utils.pad_with_zeros(predictions, labels)
     weights = weights_fn(labels)
     if labels.dim() == predictions.dim():
         keepdim = True
@@ -59,7 +43,7 @@ def accuracy_topk(predictions, labels, k=5, pad=True,
                   weights_fn=torch.ones_like, ignore=None):
     labels = labels.long()
     if pad:
-        predictions, labels = pad_with_zeros(predictions, labels)
+        predictions, labels = utils.pad_with_zeros(predictions, labels)
     weights = weights_fn(labels)
     topk_greedy_choices = predictions.topk(k)[1]
     expanded_labels = labels.repeat(*[1 for i in range(labels.dim()-2)] + [k])
@@ -70,7 +54,7 @@ def sequence_accuracy(predictions, labels, pad=True, seq_axis=2,
                       weights_fn=torch.ones_like, ignore=None):
     labels = labels.long()
     if pad:
-        predictions, labels = pad_with_zeros(predictions, labels)
+        predictions, labels = utils.pad_with_zeros(predictions, labels)
     weights = weights_fn(labels)
     if labels.dim() == predictions.dim():
         keepdim = True
@@ -85,7 +69,7 @@ def sequence_accuracy(predictions, labels, pad=True, seq_axis=2,
 def mean_squared_error(predictions, labels, root=True, pad=True, 
                        weights_fn=torch.ones_like, ignore=None):
     if pad:
-        predictions, labels = pad_with_zeros(predictions, labels)
+        predictions, labels = utils.pad_with_zeros(predictions, labels)
     weights = weights_fn(labels)
     mse = torch.mean(torch.pow(predictions - labels, 2)*weights)
     if root:
@@ -95,13 +79,16 @@ def mean_squared_error(predictions, labels, root=True, pad=True,
     return error
 
 
-def neg_log_perplexity(predictions, labels, base=2, pad=True, 
+def neg_log_perplexity(predictions, labels, log_probs=True, base=2, pad=True, 
                        weights_fn=torch.ones_like, ignore=None):
-    # Assumes predictions are probabilities, that is, lie between 0 and 1
-    # Assumes labels is a torch.LongTensor
+    """
+    If log_probs is False, assumes predictions are probabilities, that is, 
+    lie between 0 and 1; otherwise, it assumes that they are log probabilities.
+    Also, it assumes labels is a torch.LongTensor.
+    """
     labels = labels.long()
     if pad:
-        predictions, labels = pad_with_zeros(predictions, labels)
+        predictions, labels = utils.pad_with_zeros(predictions, labels)
     weights = weights_fn(labels)
     if labels.dim() < predictions.dim(): 
         # Assumes the last dim of predictions represents a distribution 
@@ -110,7 +97,11 @@ def neg_log_perplexity(predictions, labels, base=2, pad=True,
     else:
         # Assumes labels is an indicator Tensor of the same shape as predictions
         label_probabilities = predictions * labels
-    return torch.mean(torch.log(label_probabilities)*weights)
+    if log_probs:
+        log_perp = torch.mean(label_probabilities*weights)
+    else:
+        log_perp = torch.mean((torch.log(label_probabilities)/log(base))*weights)
+    return log_perp
 
 
 def approximate_bleu(predictions, labels, ignore=None):
