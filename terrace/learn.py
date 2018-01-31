@@ -76,7 +76,7 @@ class BaseTrainer:
             train_data_source: DataSource.
             train_step_fn: Callback; called repeatedly, used to execute 
                 one training step; should accept as input model, hparams, 
-                data_source, loss_function, and optimizer, as well as 
+                data_source, loss_function, optimizer, and training_log, as well as 
                 any number of additional arguments, and return either None 
                 or a dictionary of training data, e.g. {"loss": <float>, ...}.
             callbacks: List; set of TrainingCallbacks that are called 
@@ -150,7 +150,8 @@ class Trainer(BaseTrainer):
                 break
             log_data = self.train_step_fn(
                 self.model, self.hparams, self.data_source, 
-                self.loss_function, self.optimizer, *args, **kwargs)
+                self.loss_function, self.optimizer, 
+                self.training_log, *args, **kwargs)
             self.training_log.append((datetime.utcnow(), log_data))
             self.callback_log.append({})
             for callback in self.callbacks:

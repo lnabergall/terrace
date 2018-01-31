@@ -36,6 +36,7 @@ def accuracy(predictions, labels, k, pad=True,
     else:
         keepdim = False
     greedy_choices = predictions.max(-1, keepdim=keepdim)[1]
+
     return torch.mean(greedy_choices.eq(labels)*weights)
 
 
@@ -47,6 +48,7 @@ def accuracy_topk(predictions, labels, k=5, pad=True,
     weights = weights_fn(labels)
     topk_greedy_choices = predictions.topk(k)[1]
     expanded_labels = labels.repeat(*[1 for i in range(labels.dim()-2)] + [k])
+
     return torch.mean(greedy_choices.eq(expanded_labels)*weights)
 
 
@@ -63,6 +65,7 @@ def sequence_accuracy(predictions, labels, pad=True, seq_axis=2,
     greedy_choices = predictions.max(-1, keepdim=keepdim)[1]
     not_correct = greedy_choices.ne(labels) * weights
     not_correct = not_correct.sum(time_axis)
+
     return 1 - (torch.nonzero(not_correct).size[0] / not_correct.nelement())
 
 
@@ -101,6 +104,7 @@ def neg_log_perplexity(predictions, labels, log_probs=True, base=2, pad=True,
         log_perp = torch.mean(label_probabilities*weights)
     else:
         log_perp = torch.mean((torch.log(label_probabilities)/log(base))*weights)
+        
     return log_perp
 
 

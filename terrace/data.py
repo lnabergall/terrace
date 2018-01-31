@@ -13,6 +13,7 @@ import torch
 from torch.utils.data import TensorDataset as TorchTensorDataset
 
 from . import data_utilities as utils
+from . import tensor_utilities as tensor_utils
 
 
 class Dataset:
