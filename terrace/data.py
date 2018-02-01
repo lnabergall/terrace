@@ -780,7 +780,8 @@ class DataSource:
         Returns:
             Batch of data points and a boolean indicating whether the data source 
             has been exhausted or not (that is, whether the entire data source 
-            has been used and its state now reset).
+            has been used and its state now reset). If concat_batchwise is True,
+            then it also returns the original non-concatenated sequence of data points. 
         """
         data_source_exhausted = False
         if random_sample and not self._random_access:
@@ -810,21 +811,43 @@ class DataSource:
                 batch_seq = [self.data.pop() for i in range(batch_size)]
 
         if concat_batchwise:
-            # Assumes that data points either contain (compatible) lists of Tensors 
+            # Assumes that data points either contain (compatible) Tensors 
             # or (compatible) dictionaries with Tensor values
-            if isinstance(batch_seq[0][0], list):
+            if hasattr(batch_seq[0][1], "storage"):  # check if Pytorch Tensor
+                input_data = sorted([data_point[0] for data_point in batch_seq 
+                                    if data_point[0] is not None], 
+                                    key=lambda x: x.shape[0])
+                target_data = sorted([data_point[1] for data_point in batch_seq
+                                      if data_point[0] is not None], 
+                                     key=lambda x: x.shape[0])
                 batch = (
-                    [torch.cat([data_point[0][i] for data_point in batch_seq]) 
-                     for i in range(len(batch_seq[0][0]))], 
-                    [torch.cat([data_point[1][i] for data_point in batch_seq]) 
-                     for i in range(len(batch_seq[0][1]))],
+                    tensor_utils.pad_sequence(
+                        input_data, batch_first=True) if input_data else None, 
+                    tensor_utils.pad_sequence(
+                        target_data, batch_first=True) if target_data else None,
                 )
-            elif isinstance(batch_seq[0][0], dict):
+            elif isinstance(batch_seq[0][1], dict):
+                if all(data_point[0] is None for data_point in batch_seq):
+                    input_data = None
+                else:
+                    input_data = {
+                        key: sorted([data_point[0][key] for data_point in batch_seq], 
+                                    key=lambda x: x.shape[0])
+                        for key in batch_seq[0][0]
+                    }
+                if all(data_point[1] is None for data_point in batch_seq):
+                    target_data = None
+                else:
+                    target_data = {
+                        key: sorted([data_point[1][key] for data_point in batch_seq], 
+                                    key=lambda x: x.shape[0])
+                        for key in batch_seq[0][1]
+                    }
                 batch = (
-                    {key: torch.cat([data_point[0][key] for data_point in batch_seq]) 
-                     for key in batch_seq[0][0]}, 
-                    {key: torch.cat([data_point[1][key] for data_point in batch_seq]) 
-                     for key in batch_seq[0][1]},
+                    {key: tensor_utils.pad_sequence(value, batch_first=True) 
+                     for key, value in input_data.items()} if input_data else None, 
+                    {key: tensor_utils.pad_sequence(value, batch_first=True) 
+                     for key, value in target_data.items()} if target_data else None,
                 )
             else:
                 raise ValueError("Don't know how to concatenate batches " 
@@ -832,7 +855,10 @@ class DataSource:
         else:
             batch = batch_seq
 
-        return batch, data_source_exhausted
+        if concat_batchwise:
+            return batch, batch_seq, data_source_exhausted
+        else:
+            return batch, data_source_exhausted
 
     def get_feedback(self, output_data):
         """
