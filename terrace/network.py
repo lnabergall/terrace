@@ -104,12 +104,15 @@ class Module(nn.Module):
 
     def get_info(self):
         info = {}
-        for name, module in self.named_modules:
+        for name, module in self.named_modules():
             # Only include base modules, with no children
-            if len(module.named_modules) == 1:
+            if len(list(module.named_modules())) == 1:
+                module_param_info = {
+                    name: (list(param.size()), np.prod(param.size())) 
+                    for name, param in module.named_parameters()
+                }
                 info[name] = {"module": str(module), 
-                              "parameters": module.get_parameter_info()}
-
+                              "parameters": module_param_info}
         if hasattr(self, "hparams"):
             info["hparams"] = self.hparams
         elif hasattr(self, "hyperparams"):
