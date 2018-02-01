@@ -80,7 +80,10 @@ def count_index(iterable, counter, count):
         total_count += aggregate_on_collection(counter, element)
         if total_count > count:
             break
-    return i
+    if iterable:
+        return i
+    else:
+        return None
 
 
 def filter_dict(dictionary, keys):
@@ -99,17 +102,17 @@ def save(data, file_path, append=False):
 def find_filenames(root_dir, file_pattern, walk=True):
     if isinstance(file_pattern, str):
         regex = re.compile(file_pattern)
-    file_names = []
+    names = []
     if walk:
         for dir_path, dir_names, file_names in os.walk(root_dir):
-            file_names.extend(
+            names.extend(
                 [os.path.join(dir_path, file_name) for file_name in file_names 
                  if regex.fullmatch(os.path.join(dir_path, file_name))])
     else:
-        file_names = [os.path.join(root_dir, file_name) 
+        names = [os.path.join(root_dir, file_name) 
                       for file_name in os.listdir(root_dir)
                       if regex.fullmatch(os.path.join(dir_path, file_name))]
-    return file_names
+    return names
 
 
 def delete_files(file_paths):

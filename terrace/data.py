@@ -68,8 +68,9 @@ class Dataset:
             name: Str; name of the dataset (optional, default: None). 
         """
         file_names = utils.find_filenames(root_dir, file_pattern)
-        data = chain.from_iterable(data_reader(file_name) for file_name in file_names)
-        return Dataset(data, name=name)
+        data = list(chain.from_iterable(
+            data_reader(file_name) for file_name in file_names))
+        return cls(data, name=name)
 
     @classmethod
     def concatenate(cls, *datasets, method="dataset", name=None):
@@ -101,7 +102,7 @@ class Dataset:
             raise ValueError("Provided argument is not a valid method: '" 
                              + method + "'.")
 
-        return Dataset(data, input_features, target_features, name)
+        return cls(data, input_features, target_features, name)
 
     @staticmethod
     def apply_to_point(function, data_point, multi=False, split=False):
@@ -285,7 +286,7 @@ class TextDataset(Dataset):
         if size:
             data = self.data[:size]
         else:
-            data = self.data[:count_index(self.data, counter, tokens)]
+            data = self.data[:utils.count_index(self.data, counter, tokens)]
         if in_place:
             self.data = data
         else:
