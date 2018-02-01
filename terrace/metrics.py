@@ -9,22 +9,6 @@ from torch.nn.functional import pad
 from . import tensor_utilities as utils
 
 
-BUILTIN_METRICS = {
-    "accuracy": accuracy,
-    "accuracy_topk": accuracy_topk,
-    "accuracy_top5": functools.partial(accuracy_topk, k=5),
-    "sequence_accuracy": sequence_accuracy,
-    "mse": functools.partial(mean_squared_error, root=False),
-    "rmse": mean_squared_error,
-    "neg_log_perplexity": neg_log_perplexity,
-}
-
-
-def resolve_metrics(metrics):
-    return [BUILTIN_METRICS[metric] if isinstance(metric, str) else metric 
-            for metric in metrics]
-
-
 def accuracy(predictions, labels, k, pad=True, 
              weights_fn=torch.ones_like, ignore=None):
     labels = labels.long()
@@ -104,7 +88,7 @@ def neg_log_perplexity(predictions, labels, log_probs=True, base=2, pad=True,
         log_perp = torch.mean(label_probabilities*weights)
     else:
         log_perp = torch.mean((torch.log(label_probabilities)/log(base))*weights)
-        
+
     return log_perp
 
 
@@ -124,3 +108,17 @@ def rouge_l_fscore(predictions, labels, ignore=None):
     raise NotImplementedError
 
 
+BUILTIN_METRICS = {
+    "accuracy": accuracy,
+    "accuracy_topk": accuracy_topk,
+    "accuracy_top5": functools.partial(accuracy_topk, k=5),
+    "sequence_accuracy": sequence_accuracy,
+    "mse": functools.partial(mean_squared_error, root=False),
+    "rmse": mean_squared_error,
+    "neg_log_perplexity": neg_log_perplexity,
+}
+
+
+def resolve_metrics(metrics):
+    return [BUILTIN_METRICS[metric] if isinstance(metric, str) else metric 
+            for metric in metrics]

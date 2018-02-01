@@ -277,8 +277,8 @@ class TextDataset(Dataset):
                 count = 0
                 if isinstance(element, str):
                     count += 1
-                elif isinstance(element, list) or isinstance(element, tuple) 
-                        or isinstance(element, set):
+                elif (isinstance(element, list) or isinstance(element, tuple) 
+                        or isinstance(element, set)):
                     count += sum(element)
                 return count
 
@@ -473,8 +473,8 @@ class TextDataset(Dataset):
             count = 0
             if isinstance(element, str):
                 count += len(element)
-            elif isinstance(element, list) or isinstance(element, tuple) 
-                    or isinstance(element, set):
+            elif (isinstance(element, list) or isinstance(element, tuple) 
+                    or isinstance(element, set)):
                 count += sum(element)
             return count
 
@@ -482,8 +482,8 @@ class TextDataset(Dataset):
             count = 0
             if isinstance(element, str):
                 count += 1
-            elif isinstance(element, list) or isinstance(element, tuple) 
-                    or isinstance(element, set):
+            elif (isinstance(element, list) or isinstance(element, tuple) 
+                    or isinstance(element, set)):
                 count += sum(element)
             return count
 

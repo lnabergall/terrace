@@ -5,6 +5,34 @@ import statistics as stats
 from .metrics import resolve_metrics
 
 
+def infer_with_eval(model, hparams, input_data, target_data, metrics):
+    """
+    Args:
+        model: Module.
+        hparams: Hparameters.
+        input_data: Should be a data point of the form expected by model on input.
+        target_data: List or Tensor; if a list, should be a list containing 
+            a single tensor. 
+        metrics: List; a sequence of callables which accept 
+            a prediction/output tensor and a label/target tensor and return
+            a single numeric value.
+    Returns:
+        A dictionary mapping metric to values. 
+    """
+    if ((isinstance(target_data, list) and len(target_data) > 1) 
+            or isinstance(target_data, dict)):
+        raise ValueError("Unable to perform inference with evaluation on " 
+            "complex target data---please use a custom function for this purpose.")
+    elif isinstance(target_data, list):
+        target = target_data[0]
+    else:
+        target = target_data
+
+    output = model(input_data)
+
+    return {metric: metric(output, target) for metric in metrics}
+
+
 def evaluate(model, hparams, data_source, metrics, batch_size, 
              *args, eval_step_fn=infer_with_eval, steps=None, **kwargs):
     """
@@ -48,31 +76,3 @@ def evaluate(model, hparams, data_source, metrics, batch_size,
         eval_results[metric.__name__] = stats.mean(values)
 
     return eval_results
-
-
-def infer_with_eval(model, hparams, input_data, target_data, metrics):
-    """
-    Args:
-        model: Module.
-        hparams: Hparameters.
-        input_data: Should be a data point of the form expected by model on input.
-        target_data: List or Tensor; if a list, should be a list containing 
-            a single tensor. 
-        metrics: List; a sequence of callables which accept 
-            a prediction/output tensor and a label/target tensor and return
-            a single numeric value.
-    Returns:
-        A dictionary mapping metric to values. 
-    """
-    if ((isinstance(target_data, list) and len(target_data) > 1) 
-            or isinstance(target_data, dict)):
-        raise ValueError("Unable to perform inference with evaluation on " 
-            "complex target data---please use a custom function for this purpose.")
-    elif isinstance(target_data, list):
-        target = target_data[0]
-    else:
-        target = target_data
-
-    output = model(input_data)
-
-    return {metric: metric(output, target) for metric in metrics}

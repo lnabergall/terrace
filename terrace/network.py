@@ -19,7 +19,7 @@ CUDA_AVAILABLE = torch.cuda.is_available()
 
 class Variable:
 
-    def __new__(cls, *args, **kwargs, use_cuda=True, device=None):
+    def __new__(cls, *args, use_cuda=True, device=None, **kwargs):
         if use_cuda:
             return TorchVariable(*args, **kwargs).cuda(device=device)
         else:

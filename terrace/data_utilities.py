@@ -24,8 +24,8 @@ PAR_SPLIT_REGEX = re.compile(r"\s{2,}")
 
 def apply_to_collection(function, collection):
     # Applies function on every non-container element of collection.
-    if isinstance(collection, str) or isinstance(collection, bytes) 
-            or isinstance(collection, int) or isinstance(collection, float):
+    if (isinstance(collection, str) or isinstance(collection, bytes) 
+            or isinstance(collection, int) or isinstance(collection, float)):
         return function(collection)
     elif isinstance(collection, list):
         return [function(element) for element in collection]
@@ -41,8 +41,8 @@ def apply_to_collection(function, collection):
 
 def aggregate_on_collection(function, collection):
     # Recursively applies function on collection and every element of collection.
-    if isinstance(collection, str) or isinstance(collection, bytes) 
-            or isinstance(collection, int) or isinstance(collection, float):
+    if (isinstance(collection, str) or isinstance(collection, bytes) 
+            or isinstance(collection, int) or isinstance(collection, float)):
         return function(collection)
     elif isinstance(collection, list):
         return function([function(element) for element in collection])
