@@ -14,6 +14,7 @@ from torch.utils.data import TensorDataset as TorchTensorDataset
 
 from . import data_utilities as utils
 from . import tensor_utilities as tensor_utils
+from .network import Variable
 
 
 class Dataset:
@@ -403,7 +404,7 @@ class TextDataset(Dataset):
                 cleaned = element
             else:
                 cleaned = cleaner(element)
-            return cleaned
+            return cleaned 
 
         self.map(clean_element)
 
@@ -453,7 +454,7 @@ class TextDataset(Dataset):
         i.e. the base text elements in each data point are tokens.
 
         Args:
-            vocab_mapping: Dict; a mapping from vocabulary tokens to ids 
+            vocab_mapping: Dict or callable; a mapping from vocabulary tokens to ids 
                 (optional, default: None).
             convert: Callable; applied to every element of every data point, 
                 should return a list of ids (optional, default: None).
@@ -764,8 +765,8 @@ class DataSource:
                     self._state_index -= len(self) - self.size_limit
                 self.data = self.data[:self.size_limit]
 
-    def get_next_batch(self, batch_size, random_sample=False, 
-                       with_replacement=True, concat_batchwise=False):
+    def get_next_batch(self, batch_size, random_sample=False, with_replacement=True, 
+                       concat_batchwise=False, use_cuda=True, device=None):
         """
         Args:
             batch_size: Int.
@@ -778,11 +779,14 @@ class DataSource:
                 a single Tensor for each feature; requires the data points 
                 to either contain lists of Tensors or dictionaries 
                 with Tensor values (optional, default: False).
+            use_cuda: Bool; (optional, default: True).
+            device: Str; (optional, default: None).
         Returns:
             Batch of data points and a boolean indicating whether the data source 
             has been exhausted or not (that is, whether the entire data source 
             has been used and its state now reset). If concat_batchwise is True,
-            then it also returns the original non-concatenated sequence of data points. 
+            then it also returns the original non-concatenated sequence 
+            of data points. 
         """
         data_source_exhausted = False
         if random_sample and not self._random_access:
@@ -815,12 +819,14 @@ class DataSource:
             # Assumes that data points either contain (compatible) Tensors 
             # or (compatible) dictionaries with Tensor values
             if hasattr(batch_seq[0][1], "storage"):  # check if Pytorch Tensor
-                input_data = sorted([data_point[0] for data_point in batch_seq 
-                                    if data_point[0] is not None], 
-                                    key=lambda x: x.shape[0])
-                target_data = sorted([data_point[1] for data_point in batch_seq
-                                      if data_point[0] is not None], 
-                                     key=lambda x: x.shape[0])
+                input_data = sorted(
+                    [Variable(data_point[0], use_cuda=use_cuda, device=device) 
+                     for data_point in batch_seq if data_point[0] is not None], 
+                    key=lambda x: x.shape[0])
+                target_data = sorted(
+                    [Variable(data_point[1], use_cuda=use_cuda, device=device) 
+                     for data_point in batch_seq if data_point[0] is not None], 
+                    key=lambda x: x.shape[0])
                 batch = (
                     tensor_utils.pad_sequence(
                         input_data, batch_first=True) if input_data else None, 
@@ -832,16 +838,18 @@ class DataSource:
                     input_data = None
                 else:
                     input_data = {
-                        key: sorted([data_point[0][key] for data_point in batch_seq], 
-                                    key=lambda x: x.shape[0])
+                        key: sorted(
+                            [Variable(data_point[0][key], use_cuda=use_cuda, device=device)
+                             for data_point in batch_seq], key=lambda x: x.shape[0])
                         for key in batch_seq[0][0]
                     }
                 if all(data_point[1] is None for data_point in batch_seq):
                     target_data = None
                 else:
                     target_data = {
-                        key: sorted([data_point[1][key] for data_point in batch_seq], 
-                                    key=lambda x: x.shape[0])
+                        key: sorted(
+                            [Variable(data_point[1][key], use_cuda=use_cuda, device=device)
+                             for data_point in batch_seq], key=lambda x: x.shape[0])
                         for key in batch_seq[0][1]
                     }
                 batch = (
