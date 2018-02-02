@@ -1,6 +1,7 @@
 """"""
 
 import os
+import sys
 import re
 import logging
 from datetime import datetime
@@ -52,13 +53,18 @@ def setup_logging(root_dir):
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
 
-    handler = logging.FileHandler(os.path.join(root_dir, "events.log"))
-    handler.setLevel(logging.INFO)
+    file_handler = logging.FileHandler(os.path.join(root_dir, "events.log"))
+    file_handler.setLevel(logging.INFO)
+    print_handler = logging.StreamHandler(sys.stdout)
+    print_handler.setLevel(logging.INFO)
 
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s: %(message)s")
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    file_handler.setFormatter(formatter)
+    print_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(print_handler)
 
     return logger
 
