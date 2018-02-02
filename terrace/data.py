@@ -272,12 +272,12 @@ class TextDataset(Dataset):
             string = "<TextDataset(name={}, size={})>".format(self.name, len(self))
         return string
 
-    def truncate(self, size=None, tokens=None, in_place=True):
+    def truncate(self, size=None, tokens=None, token_type="token", in_place=True):
 
         def counter(element):
                 count = 0
                 if isinstance(element, str):
-                    count += 1
+                    count += 1 if not token_type.startswith("char") else len(element)
                 elif (isinstance(element, list) or isinstance(element, tuple) 
                         or isinstance(element, set)):
                     count += sum(element)

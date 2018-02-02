@@ -28,11 +28,13 @@ def apply_to_collection(function, collection):
             or isinstance(collection, int) or isinstance(collection, float)):
         return function(collection)
     elif isinstance(collection, list):
-        return [function(element) for element in collection]
+        return [apply_to_collection(function, element) for element in collection]
     elif isinstance(collection, tuple):
-        return tuple(function(element) for element in collection)
+        return tuple(apply_to_collection(function, element) 
+                     for element in collection)
     elif isinstance(collection, dict):
-        return {key: function(value) for key, value in collection.items()}
+        return {key: apply_to_collection(function, value) 
+                for key, value in collection.items()}
     elif isinstance(collection, set):
         return set(apply_to_collection(function, list(collection)))
     else:
@@ -45,13 +47,16 @@ def aggregate_on_collection(function, collection):
             or isinstance(collection, int) or isinstance(collection, float)):
         return function(collection)
     elif isinstance(collection, list):
-        return function([function(element) for element in collection])
+        return function([aggregate_on_collection(function, element) 
+                         for element in collection])
     elif isinstance(collection, tuple):
-        return function(tuple(function(element) for element in collection))
+        return function(tuple(aggregate_on_collection(function, element) 
+                              for element in collection))
     elif isinstance(collection, dict):
-        return function([function(value) for value in collection.values()])
+        return function([aggregate_on_collection(function, value) 
+                         for value in collection.values()])
     elif isinstance(collection, set):
-        return function(set(apply_to_collection(function, list(collection))))
+        return function(set(aggregate_on_collection(function, list(collection))))
     else:
         return function(collection)
 
@@ -127,7 +132,7 @@ def formatted_time(self):
 def get_statistics(sequence):
     return {
         "mean": np.mean(sequence),
-        "std": np.std(std),
+        "std": np.std(sequence),
         "median": np.percentile(sequence, 50),
         "upper_quartile": np.percentile(sequence, 75),
         "lower_quartile": np.percentile(sequence, 25), 
