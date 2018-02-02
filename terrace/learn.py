@@ -196,7 +196,7 @@ class TrainingCallback:
         pass
 
 
-def PeriodicCallback(TrainingCallback):
+class PeriodicCallback(TrainingCallback):
     """Only runs once every period steps."""
 
     def __init__(self, period, initial_run=False, final_run=True, 
@@ -213,6 +213,7 @@ def PeriodicCallback(TrainingCallback):
                 when to initiate the callback (if True) or whether to use an 
                 internal 'clock' (if False) (optional, default: True).
         """
+        super().__init__()
         self.period = period
         self.initial_run = initial_run
         self.final_run = final_run
@@ -242,7 +243,7 @@ def PeriodicCallback(TrainingCallback):
             return
 
 
-def EarlyStopCallback(PeriodicCallback):
+class EarlyStopCallback(PeriodicCallback):
     """
     Stops training when stopping_predicate returns True or metric 
     has stopped improving after period*max_wait_time steps 
@@ -342,7 +343,7 @@ def EarlyStopCallback(PeriodicCallback):
                     "stopping training at step %s..." % step)
 
 
-def TrainingLogCallback(PeriodicCallback):
+class TrainingLogCallback(PeriodicCallback):
     """
     Saves the hyperparameters and, periodically, all training and callback data.
     Also, outputs training data to the log, including the time to perform 
@@ -386,7 +387,7 @@ def TrainingLogCallback(PeriodicCallback):
         utils.save(log_string, self.log_file_name, append=True)
 
 
-def EvaluationCallback(PeriodicCallback):
+class EvaluationCallback(PeriodicCallback):
 
     def __init__(self, metrics, *args, eval_function=evaluate.evaluate, 
                  batch_size=None, steps=100, full_final_eval=True, **kwargs):
@@ -452,7 +453,7 @@ def EvaluationCallback(PeriodicCallback):
                 trainer.eval_data_source, trainer.log)
 
 
-def SaverCallback(PeriodicCallback):
+class SaverCallback(PeriodicCallback):
     """Saves the model periodically."""
 
     def __init__(self, *args, model_file_prefix=None, 
@@ -493,7 +494,7 @@ def SaverCallback(PeriodicCallback):
         trainer.log("Model saved in %s." % os.path.split(trainer.training_dir)[1])
 
 
-def LearningRateCallback(PeriodicCallback):
+class LearningRateCallback(PeriodicCallback):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -534,7 +535,10 @@ def create_optimizer(model, hparams=None, optimizer_class=None, **kwargs):
             raise ValueError("Unable to determine which optimizer to use.")
         else:
             optimizer_class = BUILTIN_OPTIMIZERS[hparams.optimizer.lower()]
-        learning_rate = hparams.optimizer_lr
+        try:
+            learning_rate = hparams.optimizer_lr
+        except AttributeError:
+            learning_rate = None
         if optimizer == optim.SGD:
             param_args = get_optimizer_parameters(
                 ["momentum", "dampening", "weight_decay", "nesterov"])
@@ -566,8 +570,11 @@ def create_optimizer(model, hparams=None, optimizer_class=None, **kwargs):
         elif optimizer == optim.Rprop:
             param_args = get_optimizer_parameters(
                 ["etas", "step_sizes"]) 
-        optimizer = optimizer_class(model.parameters(), lr=learning_rate,
-                                    **param_args)
+        if learning_rate is None:
+            optimizer = optimizer_class(model.parameters(), **param_args)
+        else:
+            optimizer = optimizer_class(model.parameters(), lr=learning_rate,
+                                        **param_args)
     else:
         optimizer = optimizer_class(**kwargs)
 
