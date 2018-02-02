@@ -6,6 +6,10 @@ import torch
 from torch.nn.functional import pad
 
 
+def is_tensor(object):
+    return hasattr(object, "storage")
+
+
 def pad_with_zeros(x, y, axis=2, length=None):
     """Pad tensor x on provided axis to match tensor y or pad both to length."""
     if length is not None and (length < x.shape[axis] or length < y.shape[axis]):

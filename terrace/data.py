@@ -646,7 +646,8 @@ class DataSource:
         if tensor_dataset is not None:
             self.initialize_with_dataset(tensor_dataset)
         else:
-            replace = lambda element: element if element else None
+            replace = (lambda element: element 
+                       if tensor_utils.is_tensor(element) or element else None)
             data = [(replace(input_data), replace(target_data)) 
                     for input_data, target_data in data]
             if random_access:
@@ -818,7 +819,7 @@ class DataSource:
         if concat_batchwise:
             # Assumes that data points either contain (compatible) Tensors 
             # or (compatible) dictionaries with Tensor values
-            if hasattr(batch_seq[0][1], "storage"):  # check if Pytorch Tensor
+            if tensor_utils.is_tensor(batch_seq[0][1]):
                 input_data = sorted(
                     [Variable(data_point[0], use_cuda=use_cuda, device=device) 
                      for data_point in batch_seq if data_point[0] is not None], 
