@@ -158,7 +158,7 @@ class Trainer(BaseTrainer):
                 self.model, self.hparams, self.train_data_source, 
                 self.loss_function, self.optimizer, 
                 self.training_log, *args, **kwargs)
-            self.training_log.append((datetime.utcnow(), log_data))
+            self.training_log.append((str(datetime.utcnow()), step, log_data))
             self.callback_log.append({})
             for callback in self.callbacks:
                 output = callback.after_train_step(self, step)
@@ -196,6 +196,13 @@ class TrainingCallback:
         pass
 
 
+class ReturnException(Exception):
+    """
+    Exception raised to indicate a training callback method 
+    should return immediately.
+    """
+
+
 class PeriodicCallback(TrainingCallback):
     """Only runs once every period steps."""
 
@@ -223,24 +230,24 @@ class PeriodicCallback(TrainingCallback):
     def begin(self, trainer):
         self.internal_clock = 0
         if not self.initial_run:
-            return
+            raise ReturnException
 
     def before_train_step(self, trainer, step):
         if self.use_external_clock and step % self.period:
-            return
+            raise ReturnException
         elif not self.use_external_clock and self.internal_clock % self.period:
-            return
+            raise ReturnException 
 
     def after_train_step(self, trainer, step):
         if self.use_external_clock and step % self.period:
-            return
+            raise ReturnException
         elif not self.use_external_clock and self.internal_clock % self.period:
-            return
-        self.internal_clock += 1
+            self.internal_clock += 1
+            raise ReturnException
 
     def end(self, trainer):
         if not self.final_run:
-            return
+            raise ReturnException
 
 
 class EarlyStopCallback(PeriodicCallback):
@@ -291,7 +298,10 @@ class EarlyStopCallback(PeriodicCallback):
         self.wait = 0
 
     def begin(self, trainer):
-        super().begin(trainer)
+        try:
+            super().begin(trainer)
+        except ReturnException:
+            return
         self.wait = 0
         self.best_value = np.Inf if self.mode == "min" else -np.Inf
 
@@ -316,17 +326,26 @@ class EarlyStopCallback(PeriodicCallback):
 
         return predicate
 
+    def before_train_step(self, trainer, step):
+        try:
+            super().before_train_step(trainer, step)
+        except ReturnException:
+            return
+
     def after_train_step(self, trainer, step):
-        super().after_train_step(trainer, step)
+        try:
+            super().after_train_step(trainer, step)
+        except ReturnException:
+            return
         if self.metric in trainer.callback_log[step]:
             stopping_data = trainer.callback_log[step][self.metric]
-        elif self.metric in trainer.training_log[step][1]:
-            stopping_data = trainer.training_log[step][1][self.metric]
+        elif self.metric in trainer.training_log[step][-1]:
+            stopping_data = trainer.training_log[step][-1][self.metric]
         elif self.metric is None:
             stopping_data = (trainer.callback_log, trainer.training_log)
         else:
             metrics = (list(trainer.callback_log[step].keys()) 
-                       + list(trainer.training_log[step][1].keys()))
+                       + list(trainer.training_log[step][-1].keys()))
             trainer.log(
                 "Early stopping conditioned on an unavailable metric '%s'. " 
                 "Available metrics: %s" % (self.metric, ",".join(metrics)), 
@@ -341,6 +360,12 @@ class EarlyStopCallback(PeriodicCallback):
         trainer._stop_training = stop
         trainer.log("Early stop condition reached; " 
                     "stopping training at step %s..." % step)
+
+    def end(self, trainer):
+        try:
+            super().end(trainer)
+        except ReturnException:
+            return
 
 
 class TrainingLogCallback(PeriodicCallback):
@@ -365,19 +390,32 @@ class TrainingLogCallback(PeriodicCallback):
         self.last_step_time = time()
 
     def begin(self, trainer):
-        super().begin(trainer)
+        try:
+            super().begin(trainer)
+        except ReturnException:
+            return
         trainer.hparams.save(trainer.training_dir, "hparams.json")
         if not self.append:
             utils.save("", self.log_file_name)
         self.last_step_time = time()
 
+    def before_train_step(self, trainer, step):
+        try:
+            super().before_train_step(trainer, step)
+        except ReturnException:
+            return
+
     def after_train_step(self, trainer, step):
-        super().after_train_step(trainer, step)
+        try:
+            super().after_train_step(trainer, step)
+        except ReturnException:
+            return
         # Output training loss + timing data
-        losses = [(key, value) for key, value in trainer.training_log[-1][1].items()
+        losses = [(key, value) for key, value in trainer.training_log[-1][-1].items()
                   if "loss" in key]
         losses.sort()
-        trainer.log("steps/sec: " + str((time() - self.last_step_time) / self.period))
+        trainer.log("steps/sec: " + str(round(
+            self.period / (time() - self.last_step_time), 4)))
         self.last_step_time = time()
         trainer.log("step %s - " % step + ", ".join(
             [key + " = " + str(value) for key, value in losses]))
@@ -385,6 +423,12 @@ class TrainingLogCallback(PeriodicCallback):
         log_data = (trainer.training_log[-1], trainer.callback_log[-1])
         log_string = "\n" + str(log_data)
         utils.save(log_string, self.log_file_name, append=True)
+
+    def end(self, trainer):
+        try:
+            super().end(trainer)
+        except ReturnException:
+            return
 
 
 class EvaluationCallback(PeriodicCallback):
@@ -417,6 +461,10 @@ class EvaluationCallback(PeriodicCallback):
         self.initial_run = True
 
     def begin(self, trainer):
+        try:
+            super().begin(trainer)
+        except ReturnException:
+            return
         if self.batch_size is None:
             self.batch_size = trainer.hparams.batch_size
 
@@ -434,8 +482,17 @@ class EvaluationCallback(PeriodicCallback):
             [str(metric) + " = " + str(value) for metric, value in results.items()]))
         return results
 
+    def before_train_step(self, trainer, step):
+        try:
+            super().before_train_step(trainer, step)
+        except ReturnException:
+            return
+
     def after_train_step(self, trainer, step):
-        super().after_train_step(trainer, step)
+        try:
+            super().after_train_step(trainer, step)
+        except ReturnException:
+            return
         if trainer.eval_data_source is None:
             trainer.log("Validation data source not provided; "
                         "unable to evaluate model.", warning=True)
@@ -445,7 +502,10 @@ class EvaluationCallback(PeriodicCallback):
                 trainer.log, step)
 
     def end(self, trainer):
-        super().end(trainer)
+        try:
+            super().end(trainer)
+        except ReturnException:
+            return
         if trainer.eval_data_source is None:
             trainer.log("Validation data source not provided; "
                         "unable to evaluate model.", warning=True)
@@ -475,12 +535,24 @@ class SaverCallback(PeriodicCallback):
         model.save(root_dir, file_name, self.parameters_only)
 
     def begin(self, trainer):
-        super().begin(trainer)
+        try:
+            super().begin(trainer)
+        except ReturnException:
+            return
         self._save_model(trainer.model, trainer.training_dir, 0)
         trainer.log("Model saved in %s." % trainer.training_dir)
 
+    def before_train_step(self, trainer, step):
+        try:
+            super().before_train_step(trainer, step)
+        except ReturnException:
+            return
+
     def after_train_step(self, trainer, step):
-        super().after_train_step(trainer, step)
+        try:
+            super().after_train_step(trainer, step)
+        except ReturnException:
+            return
         self._save_model(trainer.model, trainer.training_dir, step)
         trainer.log("Model saved in %s." % trainer.training_dir)
         if self.max_stored is not None:
@@ -491,7 +563,10 @@ class SaverCallback(PeriodicCallback):
                 utils.delete_files(stored_models[:-self.max_stored])
 
     def end(self, trainer):
-        super().end(trainer)
+        try:
+            super().end(trainer)
+        except ReturnException:
+            return
         self._save_model(trainer.model, trainer.training_dir, "final")
         trainer.log("Model saved in %s." % trainer.training_dir)
 
@@ -503,13 +578,28 @@ class LearningRateCallback(PeriodicCallback):
         raise NotImplementedError
 
     def begin(self, trainer):
-        super().begin(trainer)
+        try:
+            super().begin(trainer)
+        except ReturnException:
+            return
+
+    def before_train_step(self, trainer, step):
+        try:
+            super().before_train_step(trainer, step)
+        except ReturnException:
+            return
 
     def after_train_step(self, trainer, step):
-        super().after_train_step(trainer, step)
+        try:
+            super().after_train_step(trainer, step)
+        except ReturnException:
+            return
 
     def end(self, trainer):
-        super().end(trainer)
+        try:
+            super().end(trainer)
+        except ReturnException:
+            return
 
 
 def get_optimizer_parameters(parameter_names, hparams):
