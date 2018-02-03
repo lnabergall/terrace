@@ -107,6 +107,8 @@ def save(data, file_path, append=False):
 def find_filenames(root_dir, file_pattern, walk=True):
     if isinstance(file_pattern, str):
         regex = re.compile(file_pattern)
+    else:
+        regex = file_pattern
     names = []
     if walk:
         for dir_path, dir_names, file_names in os.walk(root_dir):
@@ -115,8 +117,8 @@ def find_filenames(root_dir, file_pattern, walk=True):
                  if regex.fullmatch(os.path.join(dir_path, file_name))])
     else:
         names = [os.path.join(root_dir, file_name) 
-                      for file_name in os.listdir(root_dir)
-                      if regex.fullmatch(os.path.join(dir_path, file_name))]
+                 for file_name in os.listdir(root_dir)
+                 if regex.fullmatch(os.path.join(root_dir, file_name))]
     return names
 
 
