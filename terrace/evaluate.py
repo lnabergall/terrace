@@ -5,30 +5,27 @@ import statistics as stats
 from .metrics import resolve_metrics
 
 
-def infer_with_eval(model, hparams, input_data, target_data, metrics):
+def infer_with_eval(model, hparams, batch_data, metrics):
     """
     Args:
         model: Module.
         hparams: Hparameters.
-        input_data: Should be a data point of the form expected by model on input.
-        target_data: List or Tensor; if a list, should be a list containing 
-            a single tensor. 
+        batch_data: Tuple; a 2-tuple of the form (input_data, target_data), 
+            where input_data is a data point of the form expected by model 
+            on input and target_data is a Tensor.
         metrics: List; a sequence of callables which accept 
             a prediction/output tensor and a label/target tensor and return
             a single numeric value.
     Returns:
         A dictionary mapping metric to values. 
     """
-    if ((isinstance(target_data, list) and len(target_data) > 1) 
-            or isinstance(target_data, dict)):
+    if isinstance(batch_data[1], list) or isinstance(batch_data[1], dict):
         raise ValueError("Unable to perform inference with evaluation on " 
             "complex target data---please use a custom function for this purpose.")
-    elif isinstance(target_data, list):
-        target = target_data[0]
     else:
-        target = target_data
+        target = batch_data[1]
 
-    output = model(input_data)
+    output = model(batch_data[0])
 
     return {metric: metric(output, target) for metric in metrics}
 
@@ -44,10 +41,10 @@ def evaluate(model, hparams, data_source, metrics, batch_size,
             return exactly one numeric value. 
         batch_size: Int.
         args: Optional positional arguments passed to eval_step_fn.
-        eval_step_fn: Callable; should accept model, hparams, input_data 
-            (from data source), target_data (from data source), metrics,
-            and any number of additional arguments and keyword arguments
-            and return a dictionary mapping metrics to values. 
+        eval_step_fn: Callable; should accept model, hparams, batch_data 
+            (concatenated, from data source), metrics, and any number of 
+            additional arguments and keyword arguments and return 
+            a dictionary mapping metrics to values.
         steps: Int; number of steps of evaluation; if None, then 
             the model is evaluated on the entire data source 
             (optional, default: None).
@@ -61,10 +58,9 @@ def evaluate(model, hparams, data_source, metrics, batch_size,
     step = 1
     results_per_step = []
     while True:
-        (input_data, target_data), data_exhausted = data_source.get_next_batch(
+        batch_data, data_exhausted = data_source.get_next_batch(
             batch_size, concat_batchwise=True)
-        results = eval_step_fn(model, hparams, input_data, target_data, 
-                               metrics, *args, **kwargs)
+        results = eval_step_fn(model, hparams, batch_data, metrics, *args, **kwargs)
         results_per_step.append(results)
         step += 1
         if step > steps or data_exhausted:

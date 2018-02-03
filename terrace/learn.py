@@ -379,8 +379,8 @@ class TrainingLogCallback(PeriodicCallback):
         losses.sort()
         trainer.log("steps/sec: " + str((time() - self.last_step_time) / self.period))
         self.last_step_time = time()
-        trainer.log("step %s - " + ", ".join(
-            [key + " = " + str(value) for key, value in losses]) % step)
+        trainer.log("step %s - " % step + ", ".join(
+            [key + " = " + str(value) for key, value in losses]))
         # Save logs
         log_data = (trainer.training_log[-1], trainer.callback_log[-1])
         log_string = "\n" + str(log_data)
@@ -426,9 +426,11 @@ class EvaluationCallback(PeriodicCallback):
             steps = None
         else:
             steps = self.steps
+        if step is None:
+            step = "final"
         results = self.eval_function(model, hparams, data_source, 
                                      self.metrics, self.batch_size, steps)
-        log_function("evaluation - step %s - " + ", ".join(
+        log_function("evaluation - step %s - " % step + ", ".join(
             [str(metric) + " = " + str(value) for metric, value in results.items()]))
         return results
 
