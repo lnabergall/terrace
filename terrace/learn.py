@@ -164,7 +164,6 @@ class Trainer(BaseTrainer):
                 output = callback.after_train_step(self, step)
                 if output is not None:
                     self.callback_log[-1].update(output)
-            map(lambda handler: handler.flush(), self.logger.handlers)
         for callback in self.callbacks:
             callback.end(self)
             if output is not None:
@@ -420,6 +419,7 @@ class TrainingLogCallback(PeriodicCallback):
         self.last_step_time = time()
         trainer.log("step %s - " % step + ", ".join(
             [key + " = " + str(round(value, 4)) for key, value in losses]))
+        map(lambda handler: handler.flush(), trainer.logger.handlers)
         # Save logs
         log_data = (trainer.training_log[-1], trainer.callback_log[-1])
         log_string = str(log_data) + "\n"
@@ -442,8 +442,9 @@ class EvaluationCallback(PeriodicCallback):
                 representing/implementing evaluation metrics; any callable 
                 should accept two tensors and return a scalar.
             eval_function: Callable; accepts model, hparams, data_source, 
-                metrics, batch_size, and steps and returns a dictionary mapping 
-                metrics to values (optional, default: evaluate.evaluate).
+                metrics, batch_size, and (as a keyword arg) steps and returns 
+                a dictionary mapping metrics to values 
+                (optional, default: evaluate.evaluate).
             batch_size: Int; if not None, batch size used during 
                 evaluation (optional, default: None). 
             steps: Int; steps of evaluation per call to eval_function 
@@ -478,7 +479,7 @@ class EvaluationCallback(PeriodicCallback):
         if step is None:
             step = "final"
         results = self.eval_function(model, hparams, data_source, 
-                                     self.metrics, self.batch_size, steps)
+                                     self.metrics, self.batch_size, steps=steps)
         log_function("evaluation - step %s - " % step + ", ".join(
             [str(metric) + " = " + str(value) for metric, value in results.items()]))
         return results
