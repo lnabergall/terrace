@@ -101,7 +101,7 @@ def save(data, file_path, append=False):
     else:
         mode = "w"
     with open(file_path, mode) as data_file:
-        data_file.write(data)
+        data_file.write(str(data))
 
 
 def find_filenames(root_dir, file_pattern, walk=True):

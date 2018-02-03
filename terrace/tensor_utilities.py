@@ -4,6 +4,7 @@ from itertools import chain
 
 import torch
 from torch.nn.functional import pad
+from torch.autograd import Variable
 
 
 def is_tensor(object):

@@ -823,11 +823,11 @@ class DataSource:
                 input_data = sorted(
                     [Variable(data_point[0], use_cuda=use_cuda, device=device) 
                      for data_point in batch_seq if data_point[0] is not None], 
-                    key=lambda x: x.shape[0])
+                    key=lambda x: x.shape[0], reverse=True)
                 target_data = sorted(
                     [Variable(data_point[1], use_cuda=use_cuda, device=device) 
-                     for data_point in batch_seq if data_point[0] is not None], 
-                    key=lambda x: x.shape[0])
+                     for data_point in batch_seq if data_point[1] is not None], 
+                    key=lambda x: x.shape[0], reverse=True)
                 batch = (
                     tensor_utils.pad_sequence(
                         input_data, batch_first=True) if input_data else None, 
@@ -841,8 +841,8 @@ class DataSource:
                     input_data = {
                         key: sorted(
                             [Variable(data_point[0][key], use_cuda=use_cuda, device=device)
-                             for data_point in batch_seq], key=lambda x: x.shape[0])
-                        for key in batch_seq[0][0]
+                             for data_point in batch_seq], key=lambda x: x.shape[0], 
+                            reverse=True) for key in batch_seq[0][0]
                     }
                 if all(data_point[1] is None for data_point in batch_seq):
                     target_data = None
@@ -850,8 +850,8 @@ class DataSource:
                     target_data = {
                         key: sorted(
                             [Variable(data_point[1][key], use_cuda=use_cuda, device=device)
-                             for data_point in batch_seq], key=lambda x: x.shape[0])
-                        for key in batch_seq[0][1]
+                             for data_point in batch_seq], key=lambda x: x.shape[0], 
+                            reverse=True) for key in batch_seq[0][1]
                     }
                 batch = (
                     {key: tensor_utils.pad_sequence(value, batch_first=True) 

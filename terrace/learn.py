@@ -155,7 +155,7 @@ class Trainer(BaseTrainer):
             if self._stop_training:
                 break
             log_data = self.train_step_fn(
-                self.model, self.hparams, self.data_source, 
+                self.model, self.hparams, self.train_data_source, 
                 self.loss_function, self.optimizer, 
                 self.training_log, *args, **kwargs)
             self.training_log.append((datetime.utcnow(), log_data))
@@ -226,15 +226,15 @@ class PeriodicCallback(TrainingCallback):
             return
 
     def before_train_step(self, trainer, step):
-        if self.use_external_clock and step % period:
+        if self.use_external_clock and step % self.period:
             return
-        elif not self.use_external_clock and self.internal_clock % period:
+        elif not self.use_external_clock and self.internal_clock % self.period:
             return
 
     def after_train_step(self, trainer, step):
-        if self.use_external_clock and step % period:
+        if self.use_external_clock and step % self.period:
             return
-        elif not self.use_external_clock and self.internal_clock % period:
+        elif not self.use_external_clock and self.internal_clock % self.period:
             return
         self.internal_clock += 1
 
@@ -470,17 +470,17 @@ class SaverCallback(PeriodicCallback):
     def _save_model(self, model, root_dir, step):
         file_name = self.model_file_prefix + "-" + str(step)
         file_name += ".params" if self.parameters_only else ".object"
-        model.save(root_dir, file_name, parameters_only)
+        model.save(root_dir, file_name, self.parameters_only)
 
     def begin(self, trainer):
         super().begin(trainer)
         self._save_model(trainer.model, trainer.training_dir, 0)
-        trainer.log("Model saved in %s." % os.path.split(trainer.training_dir)[1])
+        trainer.log("Model saved in %s." % trainer.training_dir)
 
     def after_train_step(self, trainer, step):
         super().after_train_step(trainer, step)
         self._save_model(trainer.model, trainer.training_dir, step)
-        trainer.log("Model saved in %s." % os.path.split(trainer.training_dir)[1])
+        trainer.log("Model saved in %s." % trainer.training_dir)
         if self.max_stored is not None:
             stored_models = utils.find_filenames(
                 trainer.training_dir, self.model_file_regex, walk=False)
@@ -491,7 +491,7 @@ class SaverCallback(PeriodicCallback):
     def end(self, trainer):
         super().end(trainer)
         self._save_model(trainer.model, trainer.training_dir, "final")
-        trainer.log("Model saved in %s." % os.path.split(trainer.training_dir)[1])
+        trainer.log("Model saved in %s." % trainer.training_dir)
 
 
 class LearningRateCallback(PeriodicCallback):
@@ -539,37 +539,37 @@ def create_optimizer(model, hparams=None, optimizer_class=None, **kwargs):
             learning_rate = hparams.optimizer_lr
         except AttributeError:
             learning_rate = None
-        if optimizer == optim.SGD:
+        if optimizer_class == optim.SGD:
             param_args = get_optimizer_parameters(
-                ["momentum", "dampening", "weight_decay", "nesterov"])
-        elif optimizer == optim.ASGD:
+                ["momentum", "dampening", "weight_decay", "nesterov"], hparams)
+        elif optimizer_class == optim.ASGD:
             param_args = get_optimizer_parameters(
-                ["lambd", "alpha", "t0", "weight_decay"])
-        elif optimizer == optim.RMSprop:
+                ["lambd", "alpha", "t0", "weight_decay"], hparams)
+        elif optimizer_class == optim.RMSprop:
             param_args = get_optimizer_parameters(
-                ["alpha", "eps", "weight_decay", "momentum", "centered"])
-        elif optimizer == optim.Adagrad:
+                ["alpha", "eps", "weight_decay", "momentum", "centered"], hparams)
+        elif optimizer_class == optim.Adagrad:
             param_args = get_optimizer_parameters(
-                ["lr_decay", "weight_decay"])
-        elif optimizer == optim.Adadelta:
+                ["lr_decay", "weight_decay"], hparams)
+        elif optimizer_class == optim.Adadelta:
             param_args = get_optimizer_parameters(
-                ["rho", "eps", "weight_decay"])
-        elif optimizer == optim.Adam:
+                ["rho", "eps", "weight_decay"], hparams)
+        elif optimizer_class == optim.Adam:
             param_args = get_optimizer_parameters(
-                ["betas", "eps", "weight_decay", "amsgrad"])
-        elif optimizer == optim.SparseAdam:
+                ["betas", "eps", "weight_decay", "amsgrad"], hparams)
+        elif optimizer_class == optim.SparseAdam:
             param_args = get_optimizer_parameters(
-                ["betas", "eps"])
-        elif optimizer == optim.Adamax:
+                ["betas", "eps"], hparams)
+        elif optimizer_class == optim.Adamax:
             param_args = get_optimizer_parameters(
-                ["betas", "eps", "weight_decay"])
-        elif optimizer == optim.LBFGS:
+                ["betas", "eps", "weight_decay"], hparams)
+        elif optimizer_class == optim.LBFGS:
             param_args = get_optimizer_parameters(
                 ["max_iter", "max_eval", "tolerance_grad", "tolerance_change", 
-                 "history_size", "line_search_fn"])
-        elif optimizer == optim.Rprop:
+                 "history_size", "line_search_fn"], hparams)
+        elif optimizer_class == optim.Rprop:
             param_args = get_optimizer_parameters(
-                ["etas", "step_sizes"]) 
+                ["etas", "step_sizes"], hparams) 
         if learning_rate is None:
             optimizer = optimizer_class(model.parameters(), **param_args)
         else:

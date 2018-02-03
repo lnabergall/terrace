@@ -83,7 +83,7 @@ class Module(nn.Module):
             file_name = find_latest_model(dir_path, parameters_only=False)
         return torch.load(os.path.join(dir_path, file_name))
 
-    def store(self, dir_path, file_name=None, parameters_only=True):
+    def save(self, dir_path, file_name=None, parameters_only=True):
         if file_name is None:
             file_name = "model-" + utils.formatted_time()
             file_name += ".params" if parameters_only else ".object"
