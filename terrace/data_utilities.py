@@ -1,6 +1,7 @@
 """"""
 
 import os
+import sys
 import re
 import random
 
@@ -59,6 +60,35 @@ def aggregate_on_collection(function, collection):
         return function(set(aggregate_on_collection(function, list(collection))))
     else:
         return function(collection)
+
+
+def deep_getsizeof(data, ids=None):
+    """
+    Returns the memory footprint of a (essentially) any object; 
+    based on sys.getsizeof, but uses a recursive method to handle collections
+    of objects.
+    """
+    if ids is None:
+        ids = set()
+    if id(data) in ids:
+        return 0
+
+    size = sys.getsizeof(data)
+    ids.add(id(data))
+
+    if (isinstance(data, str) or isinstance(data, bytes) 
+            or isinstance(data, int) or isinstance(data, float)):
+        return size
+    elif isinstance(data, list) or isinstance(data, tuple) or isinstance(data, set):
+        return size + sum(deep_getsizeof(element, ids) for element in list(data))
+    elif isinstance(data, dict):
+        return size + sum(deep_getsizeof(key, ids) + deep_getsizeof(value, ids) 
+                          for key, value in data.items())
+    else:
+        try:
+            return deep_getsizeof(list(data))
+        except:
+            return size
 
 
 def sample_without_replace(sequence, size):

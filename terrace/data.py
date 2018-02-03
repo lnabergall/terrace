@@ -1,7 +1,6 @@
 """"""
 
 import os
-import sys
 import re
 import warnings
 import random
@@ -260,7 +259,8 @@ class Dataset:
         the mean, standard deviation, median, upper quartile, lower quartile,
         maximum, and minimum size (in bytes) of a data point. 
         """
-        data_point_sizes = [sys.getsizeof(data_point) for data_point in self.data]
+        data_point_sizes = [utils.deep_getsizeof(data_point) 
+                            for data_point in self.data]
         return utils.get_statistics(data_point_sizes)
 
 
@@ -469,7 +469,7 @@ class TextDataset(Dataset):
 
         self.map(convert)
 
-    def get_statistics(self, tokenized=True):
+    def get_statistics(self, chars=False, tokens=False):
 
         def char_count(element):
             count = 0
@@ -489,21 +489,19 @@ class TextDataset(Dataset):
                 count += sum(element)
             return count
 
-        byte_statistics = super().get_statistics()
-        character_counts = [
-            utils.aggregate_on_collection(char_count, input_data) 
-            + utils.aggregate_on_collection(char_count, target_data)
-            for input_data, target_data in self.data]
-        if tokenized:
+        byte_stats = super().get_statistics()
+        statistics = {"byte": byte_stats}
+        if chars:
+            character_counts = [
+                utils.aggregate_on_collection(char_count, input_data) 
+                + utils.aggregate_on_collection(char_count, target_data)
+                for input_data, target_data in self.data]
+            statistics["char"] = utils.get_statistics(character_counts)
+        if tokens:
             token_counts = [
                 utils.aggregate_on_collection(token_count, input_data) 
                 + utils.aggregate_on_collection(token_count, target_data)
                 for input_data, target_data in self.data]
-        statistics = {
-            "byte": byte_statistics,
-            "character": utils.get_statistics(character_counts)
-        }
-        if tokenized:
             statistics["token"] = utils.get_statistics(token_counts)
 
         return statistics
