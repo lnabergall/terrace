@@ -164,6 +164,7 @@ class Trainer(BaseTrainer):
                 output = callback.after_train_step(self, step)
                 if output is not None:
                     self.callback_log[-1].update(output)
+            map(lambda handler: handler.flush(), self.logger.handlers)
         for callback in self.callbacks:
             callback.end(self)
             if output is not None:
@@ -418,10 +419,10 @@ class TrainingLogCallback(PeriodicCallback):
             self.period / (time() - self.last_step_time), 4)))
         self.last_step_time = time()
         trainer.log("step %s - " % step + ", ".join(
-            [key + " = " + str(value) for key, value in losses]))
+            [key + " = " + str(round(value, 4)) for key, value in losses]))
         # Save logs
         log_data = (trainer.training_log[-1], trainer.callback_log[-1])
-        log_string = "\n" + str(log_data)
+        log_string = str(log_data) + "\n"
         utils.save(log_string, self.log_file_name, append=True)
 
     def end(self, trainer):

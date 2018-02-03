@@ -1,6 +1,7 @@
 """"""
 
 import os
+import json
 from datetime import datetime
 from ast import literal_eval
 from pprint import pformat
@@ -55,7 +56,7 @@ class HParameters:
 
     def save(self, dir_path, file_name):
         hparams = self.values()
-        utils.save(hparams, os.path.join(dir_path, file_name))
+        utils.save(json.dumps(hparams), os.path.join(dir_path, file_name))
 
     def load(self, dir_path, file_name):
         with open(os.path.join(dir_path, file_name), "r") as hparam_file:
