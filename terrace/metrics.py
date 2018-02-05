@@ -9,19 +9,19 @@ from torch.nn.functional import pad
 from . import tensor_utilities as utils
 
 
-def accuracy(predictions, labels, k, pad=True, 
+def accuracy(predictions, labels, pad=True, 
              weights_fn=torch.ones_like, ignore=None):
     labels = labels.long()
     if pad:
         predictions, labels = utils.pad_with_zeros(predictions, labels)
-    weights = weights_fn(labels)
+    weights = weights_fn(labels).float()
     if labels.dim() == predictions.dim():
         keepdim = True
     else:
         keepdim = False
     greedy_choices = predictions.max(-1, keepdim=keepdim)[1]
 
-    return torch.mean(greedy_choices.eq(labels)*weights)
+    return torch.mean(greedy_choices.eq(labels).float()*weights)
 
 
 def accuracy_topk(predictions, labels, k=5, pad=True, 
@@ -29,11 +29,12 @@ def accuracy_topk(predictions, labels, k=5, pad=True,
     labels = labels.long()
     if pad:
         predictions, labels = utils.pad_with_zeros(predictions, labels)
-    weights = weights_fn(labels)
+    weights = weights_fn(labels).float()
     topk_greedy_choices = predictions.topk(k)[1]
-    expanded_labels = labels.repeat(*[1 for i in range(labels.dim()-2)] + [k])
+    expanded_labels = labels.repeat(*[1 for i in range(labels.dim()-1)] + [k])
+    weights = weights.repeat(*[1 for i in range(labels.dim()-1)] + [k])
 
-    return torch.mean(greedy_choices.eq(expanded_labels)*weights)
+    return torch.mean(topk_greedy_choices.eq(expanded_labels).float()*weights)
 
 
 def sequence_accuracy(predictions, labels, pad=True, seq_axis=2, 
@@ -41,24 +42,24 @@ def sequence_accuracy(predictions, labels, pad=True, seq_axis=2,
     labels = labels.long()
     if pad:
         predictions, labels = utils.pad_with_zeros(predictions, labels)
-    weights = weights_fn(labels)
+    weights = weights_fn(labels).float()
     if labels.dim() == predictions.dim():
         keepdim = True
     else:
         keepdim = False
     greedy_choices = predictions.max(-1, keepdim=keepdim)[1]
-    not_correct = greedy_choices.ne(labels) * weights
-    not_correct = not_correct.sum(time_axis)
+    not_correct = greedy_choices.ne(labels).float() * weights
+    not_correct = not_correct.sum(seq_axis-1)
 
-    return 1 - (torch.nonzero(not_correct).size[0] / not_correct.nelement())
+    return 1 - (torch.nonzero(not_correct).shape[0] / not_correct.nelement())
 
 
 def mean_squared_error(predictions, labels, root=True, pad=True, 
                        weights_fn=torch.ones_like, ignore=None):
     if pad:
         predictions, labels = utils.pad_with_zeros(predictions, labels)
-    weights = weights_fn(labels)
-    mse = torch.mean(torch.pow(predictions - labels, 2)*weights)
+    weights = weights_fn(labels).float()
+    mse = torch.mean(torch.pow(predictions - labels, 2).float()*weights)
     if root:
         error = mse.sqrt()
     else:
@@ -76,7 +77,7 @@ def neg_log_perplexity(predictions, labels, log_probs=True, base=2, pad=True,
     labels = labels.long()
     if pad:
         predictions, labels = utils.pad_with_zeros(predictions, labels)
-    weights = weights_fn(labels)
+    weights = weights_fn(labels).float()
     if labels.dim() < predictions.dim(): 
         # Assumes the last dim of predictions represents a distribution 
         # over classes and the last dim of labels is a class index. 
@@ -85,9 +86,10 @@ def neg_log_perplexity(predictions, labels, log_probs=True, base=2, pad=True,
         # Assumes labels is an indicator Tensor of the same shape as predictions
         label_probabilities = predictions * labels
     if log_probs:
-        log_perp = torch.mean(label_probabilities*weights)
+        log_perp = torch.mean(label_probabilities.float()*weights)
     else:
-        log_perp = torch.mean((torch.log(label_probabilities)/log(base))*weights)
+        log_perp = torch.mean(
+            (torch.log(label_probabilities.float())/log(base))*weights)
 
     return log_perp
 
@@ -111,9 +113,11 @@ def rouge_l_fscore(predictions, labels, ignore=None):
 BUILTIN_METRICS = {
     "accuracy": accuracy,
     "accuracy_topk": accuracy_topk,
-    "accuracy_top5": functools.partial(accuracy_topk, k=5),
+    "accuracy_top5": functools.update_wrapper(
+        functools.partial(accuracy_topk, k=5), accuracy_topk),
     "sequence_accuracy": sequence_accuracy,
-    "mse": functools.partial(mean_squared_error, root=False),
+    "mse": functools.update_wrapper(functools.partial(
+        mean_squared_error, root=False), mean_squared_error),
     "rmse": mean_squared_error,
     "neg_log_perplexity": neg_log_perplexity,
 }

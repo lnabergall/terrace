@@ -13,6 +13,7 @@ def is_tensor(object):
 
 def pad_with_zeros(x, y, axis=2, length=None):
     """Pad tensor x on provided axis to match tensor y or pad both to length."""
+    axis = axis - 1
     if length is not None and (length < x.shape[axis] or length < y.shape[axis]):
         raise ValueError("Provided length is not compatible with these tensors.")
     if length is None:
@@ -20,9 +21,9 @@ def pad_with_zeros(x, y, axis=2, length=None):
     x_length_diff = length - x.shape[axis]
     y_length_diff = length - y.shape[axis]
     x_padding_spec = list(chain.from_iterable(
-        [(0, x_length_diff) if x.dim()-i == axis else (0, 0) for i in range(x.dim())]))
+        [(0, x_length_diff) if x.dim()-1-i == axis else (0, 0) for i in range(x.dim())]))
     y_padding_spec = list(chain.from_iterable(
-        [(0, y_length_diff) if x.dim()-i == axis else (0, 0) for i in range(x.dim())]))
+        [(0, y_length_diff) if y.dim()-1-i == axis else (0, 0) for i in range(y.dim())]))
     x_padded = pad(x, x_padding_spec, mode="constant", value=0).data
     y_padded = pad(y, y_padding_spec, mode="constant", value=0).data
 
