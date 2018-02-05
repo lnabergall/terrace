@@ -797,6 +797,8 @@ class DataSource:
                           "could cause significant performance issues.", 
                           RuntimeWarning)
 
+        if self._state_index + batch_size > len(self.data):
+            batch_size = len(self.data) - self._state_index - 1
         if random_sample:
             if with_replacement:
                 batch_seq = random.sample(self.data, batch_size)
@@ -808,7 +810,7 @@ class DataSource:
                 batch_seq = [self.data[-i-1-self._state_index] 
                              for i in range(batch_size)]
                 self._state_index += batch_size
-                if self._state_index >= len(self):
+                if self._state_index >= len(self.data)-1:
                     self._state_index = 0
                     data_source_exhausted = True
             else:

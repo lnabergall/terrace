@@ -20,7 +20,6 @@ def accuracy(predictions, labels, pad=True,
     else:
         keepdim = False
     greedy_choices = predictions.max(-1, keepdim=keepdim)[1]
-
     return torch.mean(greedy_choices.eq(labels).float()*weights)
 
 
@@ -31,10 +30,11 @@ def accuracy_topk(predictions, labels, k=5, pad=True,
         predictions, labels = utils.pad_with_zeros(predictions, labels)
     weights = weights_fn(labels).float()
     topk_greedy_choices = predictions.topk(k)[1]
-    expanded_labels = labels.repeat(*[1 for i in range(labels.dim()-1)] + [k])
-    weights = weights.repeat(*[1 for i in range(labels.dim()-1)] + [k])
-
-    return torch.mean(topk_greedy_choices.eq(expanded_labels).float()*weights)
+    expanded_labels = labels.unsqueeze(-1).expand(
+        *[-1 for i in range(labels.dim())] + [k])
+    weights = weights.unsqueeze(-1).expand(
+        *[-1 for i in range(weights.dim())] + [k])
+    return k*torch.mean(topk_greedy_choices.eq(expanded_labels).float()*weights)
 
 
 def sequence_accuracy(predictions, labels, pad=True, seq_axis=2, 
@@ -81,7 +81,8 @@ def neg_log_perplexity(predictions, labels, log_probs=True, base=2, pad=True,
     if labels.dim() < predictions.dim(): 
         # Assumes the last dim of predictions represents a distribution 
         # over classes and the last dim of labels is a class index. 
-        label_probabilities = predictions.gather(-1, labels.unsqueeze(-1))
+        label_probabilities = predictions.gather(
+            -1, labels.unsqueeze(-1)).squeeze(-1)
     else:
         # Assumes labels is an indicator Tensor of the same shape as predictions
         label_probabilities = predictions * labels
@@ -121,6 +122,8 @@ BUILTIN_METRICS = {
     "rmse": mean_squared_error,
     "neg_log_perplexity": neg_log_perplexity,
 }
+
+BUILTIN_METRICS["accuracy_top5"].__name__ = "accuracy_top5"
 
 
 def resolve_metrics(metrics):
