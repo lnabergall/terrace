@@ -63,7 +63,7 @@ def evaluate(model, hparams, data_source, metrics, batch_size,
         results = eval_step_fn(model, hparams, batch_data, metrics, *args, **kwargs)
         results_per_step.append(results)
         step += 1
-        if step > steps or data_exhausted:
+        if (steps is not None and step > steps) or data_exhausted:
             break
 
     eval_results = {}

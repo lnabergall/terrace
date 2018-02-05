@@ -864,7 +864,7 @@ class DataSource:
             batch = batch_seq
 
         if concat_batchwise:
-            return batch, batch_seq, data_source_exhausted
+            return (batch, batch_seq), data_source_exhausted
         else:
             return batch, data_source_exhausted
 

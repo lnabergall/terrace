@@ -112,9 +112,9 @@ class BaseTrainer:
         self.logger = logger
         self.training_dir = training_dir
         if self.device == "gpu":
-            model.cuda()
+            self.model = model.cuda()
         else:
-            model.cpu()
+            self.model = model.cpu()
         self.loss_function = loss_function or create_loss_function(hparams)
         self.optimizer = (create_optimizer(model, hparams) 
                           if optimizer_creator is None 
