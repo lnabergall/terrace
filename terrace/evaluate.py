@@ -30,8 +30,8 @@ def infer_with_eval(model, hparams, batch_data, metrics):
     return {metric: metric(output, target) for metric in metrics}
 
 
-def evaluate(model, hparams, data_source, metrics, batch_size, 
-             *args, eval_step_fn=infer_with_eval, steps=None, **kwargs):
+def evaluate(model, hparams, data_source, metrics, batch_size, *args, 
+             eval_step_fn=infer_with_eval, steps=None, use_cuda=True, **kwargs):
     """
     Args:
         model: Module. 
@@ -48,6 +48,7 @@ def evaluate(model, hparams, data_source, metrics, batch_size,
         steps: Int; number of steps of evaluation; if None, then 
             the model is evaluated on the entire data source 
             (optional, default: None).
+        use_cuda: Int; (optional, default: True).
         kwargs: Optional keyword arguments passed to eval_step_fn.
     Returns:
         A dictionary mapping the names of metrics to their mean value on 
@@ -59,7 +60,7 @@ def evaluate(model, hparams, data_source, metrics, batch_size,
     results_per_step = []
     while True:
         batch_data, data_exhausted = data_source.get_next_batch(
-            batch_size, concat_batchwise=True)
+            batch_size, concat_batchwise=True, use_cuda=use_cuda)
         results = eval_step_fn(model, hparams, batch_data, metrics, *args, **kwargs)
         results_per_step.append(results)
         step += 1
