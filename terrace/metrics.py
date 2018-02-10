@@ -10,44 +10,63 @@ from . import tensor_utilities as utils
 
 
 def accuracy(predictions, labels, pad=True, 
-             weights_fn=torch.ones_like, ignore=None):
+             weights_fn=torch.ones_like, ignore=0):
     labels = labels.long()
     if pad:
         predictions, labels = utils.pad_with_zeros(predictions, labels)
+    if ignore is not None:
+        mask = (labels != ignore).float()
+        mask_ratio = labels.nelement() / mask.nonzero().shape[0]
+    else:
+        mask = torch.ones_like(labels).float()
+        mask_ratio = 1
     weights = weights_fn(labels).float()
     if labels.dim() == predictions.dim():
         keepdim = True
     else:
         keepdim = False
     greedy_choices = predictions.max(-1, keepdim=keepdim)[1]
-    return torch.mean(greedy_choices.eq(labels).float()*weights)
+    return mask_ratio * torch.mean(greedy_choices.eq(labels).float()*mask*weights)
 
 
 def accuracy_topk(predictions, labels, k=5, pad=True, 
-                  weights_fn=torch.ones_like, ignore=None):
+                  weights_fn=torch.ones_like, ignore=0):
     labels = labels.long()
     if pad:
         predictions, labels = utils.pad_with_zeros(predictions, labels)
+    if ignore is not None:
+        mask = (labels != ignore).float()
+        mask_ratio = labels.nelement() / mask.nonzero().shape[0]
+    else:
+        mask = torch.ones_like(labels).float()
+        mask_ratio = 1
     weights = weights_fn(labels).float()
     topk_greedy_choices = predictions.topk(k)[1]
     expanded_labels = labels.unsqueeze(-1).expand(
         *[-1 for i in range(labels.dim())] + [k])
     weights = weights.unsqueeze(-1).expand(
         *[-1 for i in range(weights.dim())] + [k])
-    return k*torch.mean(topk_greedy_choices.eq(expanded_labels).float()*weights)
+    mask = mask.unsqueeze(-1).expand(
+        *[-1 for i in range(mask.dim())] + [k])
+    return k * mask_ratio * torch.mean(
+        topk_greedy_choices.eq(expanded_labels).float()*mask*weights)
 
 
 def sequence_accuracy(predictions, labels, pad=True, seq_axis=2, 
-                      weights_fn=torch.ones_like, ignore=None):
+                      weights_fn=torch.ones_like, ignore=0):
     labels = labels.long()
     if pad:
         predictions, labels = utils.pad_with_zeros(predictions, labels)
+    if ignore is not None:
+        mask = (labels != ignore).long()
+    else:
+        mask = torch.ones_like(labels).long()
     weights = weights_fn(labels).float()
     if labels.dim() == predictions.dim():
         keepdim = True
     else:
         keepdim = False
-    greedy_choices = predictions.max(-1, keepdim=keepdim)[1]
+    greedy_choices = predictions.max(-1, keepdim=keepdim)[1] * mask
     not_correct = greedy_choices.ne(labels).float() * weights
     not_correct = not_correct.sum(seq_axis-1)
 
@@ -55,11 +74,18 @@ def sequence_accuracy(predictions, labels, pad=True, seq_axis=2,
 
 
 def mean_squared_error(predictions, labels, root=True, pad=True, 
-                       weights_fn=torch.ones_like, ignore=None):
+                       weights_fn=torch.ones_like, ignore=0):
     if pad:
         predictions, labels = utils.pad_with_zeros(predictions, labels)
+    if ignore is not None:
+        mask = (labels != ignore).float()
+        mask_ratio = labels.nelement() / mask.nonzero().shape[0]
+    else:
+        mask = torch.ones_like(labels).float()
+        mask_ratio = 1
     weights = weights_fn(labels).float()
-    mse = torch.mean(torch.pow(predictions - labels, 2).float()*weights)
+    mse = mask_ratio * torch.mean(
+        torch.pow(predictions - labels, 2).float()*mask*weights)
     if root:
         error = mse.sqrt()
     else:
@@ -68,7 +94,7 @@ def mean_squared_error(predictions, labels, root=True, pad=True,
 
 
 def neg_log_perplexity(predictions, labels, log_probs=True, base=2, pad=True, 
-                       weights_fn=torch.ones_like, ignore=None):
+                       weights_fn=torch.ones_like, ignore=0):
     """
     If log_probs is False, assumes predictions are probabilities, that is, 
     lie between 0 and 1; otherwise, it assumes that they are log probabilities.
@@ -77,6 +103,12 @@ def neg_log_perplexity(predictions, labels, log_probs=True, base=2, pad=True,
     labels = labels.long()
     if pad:
         predictions, labels = utils.pad_with_zeros(predictions, labels)
+    if ignore is not None:
+        mask = (labels != ignore).float()
+        mask_ratio = labels.nelement() / mask.nonzero().shape[0]
+    else:
+        mask = torch.ones_like(labels).float()
+        mask_ratio = 1
     weights = weights_fn(labels).float()
     if labels.dim() < predictions.dim(): 
         # Assumes the last dim of predictions represents a distribution 
@@ -85,29 +117,30 @@ def neg_log_perplexity(predictions, labels, log_probs=True, base=2, pad=True,
             -1, labels.unsqueeze(-1)).squeeze(-1)
     else:
         # Assumes labels is an indicator Tensor of the same shape as predictions
-        label_probabilities = predictions * labels
+        label_probabilities = torch.max(predictions * labels, -1)[0]
     if log_probs:
-        log_perp = torch.mean(label_probabilities.float()*weights)
+        log_perp = mask_ratio * torch.mean(
+            label_probabilities.float()*mask*weights)
     else:
-        log_perp = torch.mean(
-            (torch.log(label_probabilities.float())/log(base))*weights)
+        log_perp = mask_ratio * torch.mean(
+            (torch.log(label_probabilities.float())/log(base))*mask*weights)
 
     return log_perp
 
 
-def approximate_bleu(predictions, labels, ignore=None):
+def approximate_bleu(predictions, labels, ignore=0):
     raise NotImplementedError
 
 
-def bleu(predictions, labels, ignore=None):
+def bleu(predictions, labels, ignore=0):
     raise NotImplementedError
 
 
-def rouge_n_fscore(predictions, labels, n, ignore=None):
+def rouge_n_fscore(predictions, labels, n, ignore=0):
     raise NotImplementedError
 
 
-def rouge_l_fscore(predictions, labels, ignore=None):
+def rouge_l_fscore(predictions, labels, ignore=0):
     raise NotImplementedError
 
 

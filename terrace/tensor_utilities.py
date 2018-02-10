@@ -30,6 +30,18 @@ def pad_with_zeros(x, y, axis=2, length=None):
     return x_padded, y_padded
 
 
+def mask(x, mask, mask_value=0):
+    if mask.dim() == x.dim() - 1:
+        expanded_mask = torch.zeros_like(x)
+        expanded_mask.scatter_(-1, mask.unsqueeze(-1).long(), 1)
+    elif mask.dim() == x.dim():
+        expanded_mask = mask.long()
+    else:
+        raise ValueError("Mask should have dimension x.dim() or x.dim() - 1.")
+    x[expanded_mask == mask_value] = mask_value
+    return x
+
+
 def shift_right(x, pad_tensor=None, variable=False):
     """Shift the second axis of x right by one, removes the last 'column'."""
     if pad_tensor is None:
