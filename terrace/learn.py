@@ -154,6 +154,7 @@ class Trainer(BaseTrainer):
                 callback.before_train_step(self, step)
             if self._stop_training:
                 break
+            self.model.train()
             log_data = self.train_step_fn(
                 self.model, self.hparams, self.train_data_source, 
                 self.loss_function, self.optimizer, 
