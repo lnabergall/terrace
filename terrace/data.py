@@ -170,9 +170,10 @@ class Dataset:
     def filter(self, predicate, in_place=True, name=None):
         """
         Args:
-            predicate: Callable; accepts a data point and returns a boolean.
-            in_place: Bool.
-            name: Str.
+            predicate: Callable; accepts a data point and returns a boolean 
+                indicating whether to keep the data point.
+            in_place: Bool; (optional, default: True).
+            name: Str; (optional, default: None).
         """
         if in_place:
             self.data = list(filter(predicate, self.data))
@@ -195,11 +196,12 @@ class Dataset:
                 a new data point (if multi is False) or a list of data points 
                 (if multi is True).
             multi: Bool; indicates whether mapping returns a data point 
-                or list of data points.
+                or list of data points (optional, default: False).
             memory_efficient: Bool; indicates whether to minimize 
-                memory consumption or not (not applicable if in_place is False).
-            in_place: Bool.
-            name: Str.
+                memory consumption or not (not applicable if in_place is False)
+                (optional, default: False).
+            in_place: Bool; (optional, default: True).
+            name: Str; (optional, default: None).
         """
         if memory_efficient and in_place and not multi:
             for i in range(len(self.data)):
