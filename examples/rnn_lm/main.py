@@ -17,7 +17,7 @@ import data
 BASE_HPARAMS = HParameters(
     training_chars=50000000,
     batch_size=64,
-    hidden_size=1536,
+    hidden_size=256,
     num_hidden_layers=2,
     dropout=0.0,
     input_dropout=0.0, 
