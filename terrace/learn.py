@@ -25,6 +25,7 @@ BUILTIN_OPTIMIZERS = {
     "adam": optim.Adam,
     "sparseadam": optim.SparseAdam,
     "adamax": optim.Adamax,
+    "amsgrad": functools.partial(optim.Adam, amsgrad=True),
     "lbfgs": optim.LBFGS,
     "rprop": optim.Rprop,
 }
@@ -675,9 +676,11 @@ def create_optimizer(model, hparams=None, optimizer_class=None, **kwargs):
         elif optimizer_class == optim.Adadelta:
             param_args = get_optimizer_parameters(
                 ["rho", "eps", "weight_decay"], hparams)
-        elif optimizer_class == optim.Adam:
+        elif optimizer_class == optim.Adam or (
+                isinstance(optimizer_class, functools.partial) 
+                and optimizer_class.func == optim.Adam):
             param_args = get_optimizer_parameters(
-                ["betas", "eps", "weight_decay", "amsgrad"], hparams)
+                ["betas", "eps", "weight_decay"], hparams)
         elif optimizer_class == optim.SparseAdam:
             param_args = get_optimizer_parameters(
                 ["betas", "eps"], hparams)
