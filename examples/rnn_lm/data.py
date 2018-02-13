@@ -1,7 +1,6 @@
 """"""
 
 import os
-import sys
 import re
 import tarfile
 import functools
@@ -20,13 +19,11 @@ OOV_TOKEN = "<UNK>"
 PAD_TOKEN = "<PAD>"
 EOS_TOKEN = "<EOS>"
 RESERVED_TOKENS = [PAD_TOKEN, EOS_TOKEN]
-PAD_ID = RESERVED_TOKENS.index(PAD_TOKEN)
 EOS_ID = RESERVED_TOKENS.index(EOS_TOKEN)
 
 
 def download_corpus(directory):
-    corpus_file_name = os.path.basename(CORPUS_URL)
-    corpus_file_path = os.path.join(directory, corpus_file_name)
+    corpus_file_path = os.path.join(directory, os.path.basename(CORPUS_URL))
     if (not os.path.exists(corpus_file_path) 
             and not os.path.exists(corpus_file_path[:-7])):
         # download
@@ -39,8 +36,7 @@ def download_corpus(directory):
 
 
 def get_original_vocab(directory):
-    vocab_file_name = os.path.basename(ORIG_VOCAB_URL)
-    vocab_file_path = os.path.join(directory, vocab_file_name)
+    vocab_file_path = os.path.join(directory, os.path.basename(ORIG_VOCAB_URL))
     if not os.path.exists(vocab_file_path):
         # download
         with open(vocab_file_path, "wb") as vocab_file:
@@ -101,10 +97,8 @@ def get_1billion_dataset(root_dir, dataset_type="training",
     if chars is not None:
         dataset.truncate(tokens=chars, token_type="character")
 
-    original_vocab = get_original_vocab(root_dir)
-    oov_replacer = functools.partial(replace_oov, original_vocab)
+    oov_replacer = functools.partial(replace_oov, get_original_vocab(root_dir))
     dataset.clean(cleaner=oov_replacer)
-
     dataset.convert_to_ids(converter=vocab_encoder)
     if dataset_type == "training":
         # Remove outlier sentences that consume too much memory
@@ -116,8 +110,7 @@ def get_1billion_dataset(root_dir, dataset_type="training",
 
 
 def convert_to_datasource(sequence_dataset, vocab_size):
-    tensor_data = sequence_dataset.convert_to_tensor(
-        len(RESERVED_TOKENS)+vocab_size)
+    tensor_data = sequence_dataset.convert_to_tensor(vocab_size)
     data_source = DataSource(data=tensor_data, 
                              name=sequence_dataset.name + "_datasource")
     data_source.shuffle()

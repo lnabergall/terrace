@@ -3,7 +3,6 @@
 import os
 import functools as func
 from six import int2byte
-from time import time
 
 import torch
 from torch import nn
@@ -27,7 +26,6 @@ BASE_HPARAMS = HParameters(
     loss_ignore_index=0,
     optimizer="adagrad",
     optimizer_lr=0.01,
-    eval_autoregressive=False,
     sample_temperature=1.0,
     scheduled_sampling_prob=0.0,
     max_seq_length=400,
@@ -50,7 +48,6 @@ class LSTMLanguageModel(Module):
 
     def forward(self, input_var, states=None, batch_size=None, autoregressive=False):
         use_cuda = next(self.parameters()).is_cuda
-        autoregressive = autoregressive or self.hparams.eval_autoregressive
         sample_prob = self.hparams.scheduled_sampling_prob
         temperature = self.hparams.sample_temperature
         batch_size = self.hparams.batch_size if batch_size is None else batch_size
@@ -101,9 +98,6 @@ class LSTMLanguageModel(Module):
 
         return output, states
 
-    def init_params(self):
-        raise NotImplementedError
-
     def init_states(self, batch_size=None, use_cuda=True):
         if batch_size is None:
             batch_size = self.hparams.batch_size
@@ -121,16 +115,14 @@ class LSTMLanguageModel(Module):
 def perform_train_step(model, hparams, data_source, loss_function, 
                        optimizer, training_log, use_cuda=True):
     optimizer.zero_grad()
-    ((input_data, target_data), batch_points), exhausted = data_source.get_next_batch(
+    ((input_data, target_data), _), exhausted = data_source.get_next_batch(
         hparams.batch_size, concat_batchwise=True, use_cuda=use_cuda)
-    batch_size = len(batch_points)
+    batch_size = target_data.shape[0]
     states = model.init_states(batch_size, use_cuda)
     if exhausted:
         data_source.shuffle()
-    if input_data is None:
-        input_data = Variable(target_data.data, use_cuda=use_cuda)
-    input_data = shift_right(input_data, variable=True)
-    output, _ = model(input_data, states, batch_size)
+    input_data = Variable(target_data.data, use_cuda=use_cuda)
+    output, _ = model(shift_right(input_data, variable=True), states, batch_size)
     loss = loss_function(output.view(-1, output.size(-1)), target_data.view(-1))
     loss.backward()
     optimizer.step()
@@ -138,17 +130,11 @@ def perform_train_step(model, hparams, data_source, loss_function,
 
 
 def infer_with_eval(model, hparams, batch_data, metrics, use_cuda=True):
-    (input_data, target_data), batch_points = batch_data
-    batch_size = len(batch_points)
+    (input_data, target_data), _ = batch_data
+    batch_size = target_data.shape[0]
     states = model.init_states(batch_size, use_cuda)
-    if not hparams.eval_autoregressive:
-        if input_data is None:
-            input_data = Variable(target_data.data, use_cuda=use_cuda, volatile=True)
-        input_data = shift_right(input_data, variable=True)
-        output, _ = model(input_data, states, batch_size)
-    else:
-        output, _ = model(None, states, batch_size=batch_size)
-
+    input_data = Variable(target_data.data, use_cuda=use_cuda, volatile=True)
+    output, _ = model(shift_right(input_data, variable=True), states, batch_size)
     return {metric: metric(output, target_data) for metric in metrics}
 
 
@@ -171,11 +157,7 @@ def train_with_eval(model, hparams, train_data_source, eval_data_source,
     trainer.run(steps, use_cuda=use_cuda)
 
 
-class CharTextEncoder():
-
-    @property
-    def vocab_size(self):
-        return 2**8 + len(data.RESERVED_TOKENS)
+class CharTextEncoder:
 
     def encode(self, string):
         reserved = len(data.RESERVED_TOKENS)
@@ -211,12 +193,12 @@ def run_experiment(root_dir, hparams, training_steps, use_cuda=True):
     if not os.path.exists(training_dir):
         os.mkdir(training_dir)
     logger = learn.setup_logging(training_dir)
-    hparams.update({"vocab_size": encoder.vocab_size})
+    hparams.update({"vocab_size": 2**8 + len(data.RESERVED_TOKENS)})
     
     train_data_source = data.convert_to_datasource(
-        train_dataset, encoder.vocab_size)
+        train_dataset, hparams.vocab_size)
     eval_data_source = data.convert_to_datasource(
-        eval_dataset, encoder.vocab_size)
+        eval_dataset, hparams.vocab_size)
 
     # Create model and run training
     model = LSTMLanguageModel(hparams)
@@ -242,7 +224,7 @@ def generate(model, hparams, data_source, input_string=None, num_examples=1,
         output, _ = model(input_data, states, 1, autoregressive=True)
         output_string = encoder.decode(
             [id_ for id_ in list(output.data.long().squeeze()) if id_])
-        examples.append(output_string)
+        examples.append((None, output_string))
 
-    return [(None, example) for example in examples]
+    return examples
 
