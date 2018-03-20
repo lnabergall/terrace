@@ -625,10 +625,23 @@ class TensorDataset:
         return self.input_data[0].size()
 
 
+def pin_memory_batch(batch):
+    if torch.is_tensor(batch):
+        return batch.pin_memory()
+    elif isinstance(batch, "str"):
+        return batch
+    elif isinstance(batch, collections.Mapping):
+        return {key: pin_memory_batch(value) for key, value in batch.items()}
+    elif isinstance(batch, collections.Sequence):
+        return [pin_memory_batch(element) for element in batch]
+    else:
+        return batch
+
+
 def collate_batch(batch_seq, use_cuda=True, device=None):
     # Assumes that data points either contain (compatible) Tensors 
     # or (compatible) dictionaries with Tensor values
-    if tensor_utils.is_tensor(batch_seq[0][1]):
+    if torch.is_tensor(batch_seq[0][1]):
         input_data = sorted(
             [Variable(data_point[0], use_cuda=use_cuda, device=device) 
              for data_point in batch_seq if data_point[0] is not None], 
@@ -696,7 +709,7 @@ class DataSource:
             self.initialize_with_dataset(tensor_dataset)
         else:
             replace = (lambda element: element 
-                       if tensor_utils.is_tensor(element) or element else None)
+                       if torch.is_tensor(element) or element else None)
             data = [(replace(input_data), replace(target_data)) 
                     for input_data, target_data in data]
             if random_access:
@@ -816,7 +829,8 @@ class DataSource:
                 self.data = self.data[:self.size_limit]
 
     def get_next_batch(self, batch_size, random_sample=False, with_replacement=True, 
-                       collate_function=collate_batch, use_cuda=True, device=None):
+                       collate_function=collate_batch, pin_memory=False, 
+                       use_cuda=True, device=None):
         """
         Args:
             batch_size: Int.
@@ -838,6 +852,7 @@ class DataSource:
             then it also returns the original non-concatenated sequence 
             of data points. 
         """
+        pin_memory = pin_memory and torch.cuda.is_available()
         data_source_exhausted = False
         if random_sample and not self._random_access:
             warnings.warn("Randomly sampling batches with random_access == False " 
@@ -866,6 +881,8 @@ class DataSource:
                     data_source_exhausted = True
             else:
                 batch_seq = [self.data.pop() for i in range(batch_size)]
+        if pin_memory:
+            batch_seq = pin_memory_batch(batch_seq)
 
         if collate_function is not None:
             batch = collate_function(batch_seq, use_cuda, device)
