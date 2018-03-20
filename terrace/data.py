@@ -628,7 +628,7 @@ class TensorDataset:
 def pin_memory_batch(batch):
     if torch.is_tensor(batch):
         return batch.pin_memory()
-    elif isinstance(batch, "str"):
+    elif isinstance(batch, str):
         return batch
     elif isinstance(batch, collections.Mapping):
         return {key: pin_memory_batch(value) for key, value in batch.items()}
