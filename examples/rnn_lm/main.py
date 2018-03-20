@@ -116,7 +116,7 @@ def perform_train_step(model, hparams, data_source, loss_function,
                        optimizer, training_log, use_cuda=True):
     optimizer.zero_grad()
     ((input_data, target_data), _), exhausted = data_source.get_next_batch(
-        hparams.batch_size, concat_batchwise=True, use_cuda=use_cuda)
+        hparams.batch_size, use_cuda=use_cuda)
     batch_size = target_data.shape[0]
     states = model.init_states(batch_size, use_cuda)
     if exhausted:

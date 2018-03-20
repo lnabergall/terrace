@@ -625,6 +625,55 @@ class TensorDataset:
         return self.input_data[0].size()
 
 
+def collate_batch(batch_seq, use_cuda=True, device=None):
+    # Assumes that data points either contain (compatible) Tensors 
+    # or (compatible) dictionaries with Tensor values
+    if tensor_utils.is_tensor(batch_seq[0][1]):
+        input_data = sorted(
+            [Variable(data_point[0], use_cuda=use_cuda, device=device) 
+             for data_point in batch_seq if data_point[0] is not None], 
+            key=lambda x: x.shape[0], reverse=True)
+        target_data = sorted(
+            [Variable(data_point[1], use_cuda=use_cuda, device=device) 
+             for data_point in batch_seq if data_point[1] is not None], 
+            key=lambda x: x.shape[0], reverse=True)
+        batch = (
+            tensor_utils.pad_sequence(
+                input_data, batch_first=True) if input_data else None, 
+            tensor_utils.pad_sequence(
+                target_data, batch_first=True) if target_data else None,
+        )
+    elif isinstance(batch_seq[0][1], dict):
+        if all(data_point[0] is None for data_point in batch_seq):
+            input_data = None
+        else:
+            input_data = {
+                key: sorted(
+                    [Variable(data_point[0][key], use_cuda=use_cuda, device=device)
+                     for data_point in batch_seq], key=lambda x: x.shape[0], 
+                    reverse=True) for key in batch_seq[0][0]
+            }
+        if all(data_point[1] is None for data_point in batch_seq):
+            target_data = None
+        else:
+            target_data = {
+                key: sorted(
+                    [Variable(data_point[1][key], use_cuda=use_cuda, device=device)
+                     for data_point in batch_seq], key=lambda x: x.shape[0], 
+                    reverse=True) for key in batch_seq[0][1]
+            }
+        batch = (
+            {key: tensor_utils.pad_sequence(value, batch_first=True) 
+             for key, value in input_data.items()} if input_data else None, 
+            {key: tensor_utils.pad_sequence(value, batch_first=True) 
+             for key, value in target_data.items()} if target_data else None,
+        )
+    else:
+        raise ValueError("Don't know how to concatenate batches " 
+                         "with data points of this form.")
+    return batch
+
+
 class DataSource:
 
     def __init__(self, tensor_dataset=None, data=None, size_limit=None, 
@@ -767,7 +816,7 @@ class DataSource:
                 self.data = self.data[:self.size_limit]
 
     def get_next_batch(self, batch_size, random_sample=False, with_replacement=True, 
-                       concat_batchwise=False, use_cuda=True, device=None):
+                       collate_function=collate_batch, use_cuda=True, device=None):
         """
         Args:
             batch_size: Int.
@@ -775,11 +824,11 @@ class DataSource:
                 from the data source (optional, default: False).
             with_replacement: Bool; whether to sample the batch from 
                 the data source with replacement or not (optional, default: True).
-            concat_batchwise: Bool; whether to return the batch with 
-                all data points concatenated together batchwise into 
-                a single Tensor for each feature; requires the data points 
-                to either contain lists of Tensors or dictionaries 
-                with Tensor values (optional, default: False).
+            collate_function: Callable; given a list of data points, 
+                a boolean indicating whether to send data points to the GPU, 
+                and a device string, should return the data points 
+                merged batchwise; if None, data points are returned 
+                without any merging (optional, default: collate_batch).
             use_cuda: Bool; (optional, default: True).
             device: Str; (optional, default: None).
         Returns:
@@ -818,59 +867,11 @@ class DataSource:
             else:
                 batch_seq = [self.data.pop() for i in range(batch_size)]
 
-        if concat_batchwise:
-            # Assumes that data points either contain (compatible) Tensors 
-            # or (compatible) dictionaries with Tensor values
-            if tensor_utils.is_tensor(batch_seq[0][1]):
-                input_data = sorted(
-                    [Variable(data_point[0], use_cuda=use_cuda, device=device) 
-                     for data_point in batch_seq if data_point[0] is not None], 
-                    key=lambda x: x.shape[0], reverse=True)
-                target_data = sorted(
-                    [Variable(data_point[1], use_cuda=use_cuda, device=device) 
-                     for data_point in batch_seq if data_point[1] is not None], 
-                    key=lambda x: x.shape[0], reverse=True)
-                batch = (
-                    tensor_utils.pad_sequence(
-                        input_data, batch_first=True) if input_data else None, 
-                    tensor_utils.pad_sequence(
-                        target_data, batch_first=True) if target_data else None,
-                )
-            elif isinstance(batch_seq[0][1], dict):
-                if all(data_point[0] is None for data_point in batch_seq):
-                    input_data = None
-                else:
-                    input_data = {
-                        key: sorted(
-                            [Variable(data_point[0][key], use_cuda=use_cuda, device=device)
-                             for data_point in batch_seq], key=lambda x: x.shape[0], 
-                            reverse=True) for key in batch_seq[0][0]
-                    }
-                if all(data_point[1] is None for data_point in batch_seq):
-                    target_data = None
-                else:
-                    target_data = {
-                        key: sorted(
-                            [Variable(data_point[1][key], use_cuda=use_cuda, device=device)
-                             for data_point in batch_seq], key=lambda x: x.shape[0], 
-                            reverse=True) for key in batch_seq[0][1]
-                    }
-                batch = (
-                    {key: tensor_utils.pad_sequence(value, batch_first=True) 
-                     for key, value in input_data.items()} if input_data else None, 
-                    {key: tensor_utils.pad_sequence(value, batch_first=True) 
-                     for key, value in target_data.items()} if target_data else None,
-                )
-            else:
-                raise ValueError("Don't know how to concatenate batches " 
-                                 "with data points of this form.")
-        else:
-            batch = batch_seq
-
-        if concat_batchwise:
+        if collate_function is not None:
+            batch = collate_function(batch_seq, use_cuda, device)
             return (batch, batch_seq), data_source_exhausted
         else:
-            return batch, data_source_exhausted
+            return batch_seq, data_source_exhausted
 
     def get_feedback(self, output_data):
         """

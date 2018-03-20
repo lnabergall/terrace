@@ -60,7 +60,7 @@ def evaluate(model, hparams, data_source, metrics, batch_size, *args,
     results_per_step = []
     while True:
         batch_data, data_exhausted = data_source.get_next_batch(
-            batch_size, concat_batchwise=True, use_cuda=use_cuda)
+            batch_size, use_cuda=use_cuda)
         results = eval_step_fn(model, hparams, batch_data, metrics, *args, **kwargs)
         results_per_step.append(results)
         step += 1
