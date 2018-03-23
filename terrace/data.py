@@ -5,7 +5,7 @@ import re
 import warnings
 import random
 from itertools import chain
-from collections import Counter, deque
+from collections import Counter, deque, Mapping, Sequence
 
 import numpy as np
 import torch
@@ -639,51 +639,39 @@ def pin_memory_batch(batch):
 
 
 def collate_batch(batch_seq, use_cuda=True, device=None):
-    # Assumes that data points either contain (compatible) Tensors 
-    # or (compatible) dictionaries with Tensor values
-    if torch.is_tensor(batch_seq[0][1]):
-        input_data = sorted(
-            [Variable(data_point[0], use_cuda=use_cuda, device=device) 
-             for data_point in batch_seq if data_point[0] is not None], 
-            key=lambda x: x.shape[0], reverse=True)
-        target_data = sorted(
-            [Variable(data_point[1], use_cuda=use_cuda, device=device) 
-             for data_point in batch_seq if data_point[1] is not None], 
-            key=lambda x: x.shape[0], reverse=True)
-        batch = (
-            tensor_utils.pad_sequence(
-                input_data, batch_first=True) if input_data else None, 
-            tensor_utils.pad_sequence(
-                target_data, batch_first=True) if target_data else None,
-        )
-    elif isinstance(batch_seq[0][1], dict):
-        if all(data_point[0] is None for data_point in batch_seq):
-            input_data = None
-        else:
-            input_data = {
-                key: sorted(
-                    [Variable(data_point[0][key], use_cuda=use_cuda, device=device)
-                     for data_point in batch_seq], key=lambda x: x.shape[0], 
-                    reverse=True) for key in batch_seq[0][0]
-            }
-        if all(data_point[1] is None for data_point in batch_seq):
-            target_data = None
-        else:
-            target_data = {
-                key: sorted(
-                    [Variable(data_point[1][key], use_cuda=use_cuda, device=device)
-                     for data_point in batch_seq], key=lambda x: x.shape[0], 
-                    reverse=True) for key in batch_seq[0][1]
-            }
-        batch = (
-            {key: tensor_utils.pad_sequence(value, batch_first=True) 
-             for key, value in input_data.items()} if input_data else None, 
-            {key: tensor_utils.pad_sequence(value, batch_first=True) 
-             for key, value in target_data.items()} if target_data else None,
-        )
+    """Puts each data field into a tensor with outer dimension batch size."""
+    if torch.is_tensor(batch_seq[0]):
+        batch_seq = [Variable(tensor, use_cuda=use_cuda, device=device) 
+                     for tensor in batch_seq]
+        batch = tensor_utils.pad_sequence(
+            sorted(batch_seq, key=lambda x: x.shape[0], reverse=True), 
+            batch_first=True)
+    elif type(batch_seq[0]).__name__ == "ndarray":
+        batch_seq = [Variable(torch.from_numpy(tensor), 
+                              use_cuda=use_cuda, device=device) 
+                     for tensor in batch_seq]
+        batch = tensor_utils.pad_sequence(
+            sorted(batch_seq, key=lambda x: x.shape[0], reverse=True), 
+            batch_first=True)
+    elif isinstance(batch_seq[0], Sequence):
+        transposed = zip(*batch_seq)
+        batch = [collate_batch(field_batch) for field_batch in transposed]
+    elif isinstance(batch_seq[0], Mapping):
+        batch = {key: collate_batch(element[key] for element in batch) 
+                 for key in batch_seq[0]}
+    elif isinstance(batch_seq[0], int):
+        batch = Variable(torch.LongTensor(batch_seq), 
+                         use_cuda=use_cuda, device=device)
+    elif isinstance(batch_seq[0], float):
+        batch = Variable(torch.FloatTensor(batch_seq), 
+                         use_cuda=use_cuda, device=device)
+    elif isinstance(batch_seq[0], str):
+        batch = batch_seq
+    elif not batch_seq[0]:
+        batch = None
     else:
-        raise ValueError("Don't know how to concatenate batches " 
-                         "with data points of this form.")
+        raise TypeError("Can't collate a batch with fields of type {}"
+                        .format(type(batch_seq[0])))
     return batch
 
 
@@ -885,7 +873,9 @@ class DataSource:
             batch_seq = pin_memory_batch(batch_seq)
 
         if collate_function is not None:
-            batch = collate_function(batch_seq, use_cuda, device)
+            input_batch_seq, target_batch_seq = tuple(zip(*batch_seq))
+            batch = (collate_function(input_batch_seq, use_cuda, device),
+                     collate_function(target_batch_seq, use_cuda, device))
             return (batch, batch_seq), data_source_exhausted
         else:
             return batch_seq, data_source_exhausted
